@@ -1,24 +1,15 @@
-"""Guided letter writing system."""
+"""Guided letter writing system (Legacy - use EnhancedLetterWriter for new code)."""
 
 from typing import Dict, Any, Optional
-from enum import Enum
 from dataclasses import dataclass
 
+from src.letters.types import LetterStage  # Import from types.py to avoid duplication
 from src.letters.biff_transformer import BIFFTransformer
 from src.letters.nvc_transformer import NVCTransformer
 from src.letters.validator import LetterValidator
 from src.core.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-class LetterStage(str, Enum):
-    """Stages of letter writing process."""
-    INIT = "init"
-    DRAFT = "draft"
-    TRANSFORM = "transform"
-    VALIDATE = "validate"
-    FINALIZE = "finalize"
 
 
 @dataclass

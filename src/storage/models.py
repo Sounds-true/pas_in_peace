@@ -200,6 +200,9 @@ class Letter(Base):
     recipient_role = Column(String(100))  # ex-partner/school/therapist/etc
     purpose = Column(String(100))  # communication/mediation/documentation/etc
 
+    # Letter type (NEW)
+    letter_type = Column(String(50), default="for_sending")  # for_sending/time_capsule/therapeutic
+
     # Letter versions
     version_number = Column(Integer, default=1)
     draft_content = Column(Text)  # Current draft (PII-scrubbed)
@@ -207,6 +210,17 @@ class Letter(Base):
     # Style and approach
     communication_style = Column(String(50))  # BIFF/NVC/formal/etc
     tone_assessment = Column(JSON, default=dict)
+
+    # Toxicity analysis (NEW)
+    toxicity_score = Column(Float)  # 0.0-1.0 overall toxicity
+    toxicity_details = Column(JSON, default=dict)  # Detoxify results + LLM recommendations
+    toxicity_warnings_ignored = Column(Boolean, default=False)  # User chose to keep toxic content
+
+    # Telegraph integration (NEW)
+    telegraph_url = Column(String(500))  # Current version URL
+    telegraph_path = Column(String(200))  # Path for editing
+    telegraph_access_token = Column(String(200))  # For updates
+    telegraph_versions = Column(JSON, default=list)  # Version history with toxicity tracking
 
     # Review and feedback
     guardrail_checks = Column(JSON, default=list)
