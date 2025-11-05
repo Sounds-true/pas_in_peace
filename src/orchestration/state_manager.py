@@ -19,6 +19,7 @@ from src.techniques import (
     ValidationTechnique,
     ActiveListening
 )
+from src.rag import KnowledgeRetriever, PAKnowledgeBase
 
 
 logger = get_logger(__name__)
@@ -82,6 +83,9 @@ class StateManager:
             "active_listening": ActiveListening()
         }
 
+        # Initialize RAG retriever
+        self.knowledge_retriever = KnowledgeRetriever()
+
         self.initialized = False
 
     async def initialize(self) -> None:
@@ -102,6 +106,17 @@ class StateManager:
             except Exception as e:
                 logger.warning("emotion_detector_disabled", reason=str(e))
                 # Continue without emotion detector - will use keyword fallback
+
+            # Initialize RAG retriever and load knowledge base
+            try:
+                await self.knowledge_retriever.initialize()
+                # Load knowledge base documents
+                documents = PAKnowledgeBase.get_all_documents()
+                await self.knowledge_retriever.add_documents(documents)
+                logger.info("knowledge_retriever_enabled", doc_count=len(documents))
+            except Exception as e:
+                logger.warning("knowledge_retriever_disabled", reason=str(e))
+                # Continue without RAG - will use only predefined responses
 
             # Build the state graph
             self.graph = self._build_state_graph()
@@ -554,3 +569,53 @@ class StateManager:
         """Route after technique execution."""
         # Placeholder - would check technique effectiveness
         return "success"
+
+    async def augment_with_knowledge(
+        self,
+        query: str,
+        base_response: str,
+        top_k: int = 2
+    ) -> str:
+        """
+        Augment response with retrieved knowledge.
+
+        Args:
+            query: User query/message
+            base_response: Base response from technique or handler
+            top_k: Number of documents to retrieve
+
+        Returns:
+            Augmented response with relevant knowledge
+        """
+        if not self.knowledge_retriever or not self.knowledge_retriever.initialized:
+            return base_response
+
+        try:
+            # Retrieve relevant documents
+            results = await self.knowledge_retriever.retrieve(query, top_k=top_k, threshold=0.4)
+
+            if not results:
+                return base_response
+
+            # Format retrieved knowledge
+            knowledge_snippets = []
+            for result in results:
+                # Extract relevant portion of document
+                doc_content = result.document.content.strip()
+                # Limit to first 200 characters
+                snippet = doc_content[:200] + "..." if len(doc_content) > 200 else doc_content
+                knowledge_snippets.append(snippet)
+
+            # Augment response with knowledge
+            if knowledge_snippets:
+                augmented = f"{base_response}\n\n📚 **Дополнительная информация:**\n"
+                for i, snippet in enumerate(knowledge_snippets, 1):
+                    augmented += f"\n{i}. {snippet}\n"
+
+                return augmented
+            else:
+                return base_response
+
+        except Exception as e:
+            logger.error("knowledge_augmentation_failed", error=str(e))
+            return base_response
