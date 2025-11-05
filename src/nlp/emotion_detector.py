@@ -2,7 +2,7 @@
 
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 

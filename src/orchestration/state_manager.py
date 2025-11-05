@@ -12,6 +12,13 @@ from langchain.schema import BaseMessage, HumanMessage, SystemMessage
 from src.core.logger import get_logger
 from src.core.config import settings
 from src.safety.guardrails_manager import GuardrailsManager
+from src.nlp.emotion_detector import EmotionDetector
+from src.techniques import (
+    CBTReframing,
+    GroundingTechnique,
+    ValidationTechnique,
+    ActiveListening
+)
 
 
 logger = get_logger(__name__)
@@ -65,6 +72,16 @@ class StateManager:
         self.user_states: Dict[str, UserState] = {}
         self.graph: Optional[StateGraph] = None
         self.guardrails = GuardrailsManager()
+        self.emotion_detector = EmotionDetector()
+
+        # Initialize therapeutic techniques
+        self.techniques = {
+            "cbt": CBTReframing(),
+            "grounding": GroundingTechnique(),
+            "validation": ValidationTechnique(),
+            "active_listening": ActiveListening()
+        }
+
         self.initialized = False
 
     async def initialize(self) -> None:
@@ -77,6 +94,14 @@ class StateManager:
             except Exception as e:
                 logger.warning("guardrails_disabled", reason=str(e))
                 self.guardrails = None
+
+            # Initialize emotion detector (optional for MVP)
+            try:
+                await self.emotion_detector.initialize()
+                logger.info("emotion_detector_enabled")
+            except Exception as e:
+                logger.warning("emotion_detector_disabled", reason=str(e))
+                # Continue without emotion detector - will use keyword fallback
 
             # Build the state graph
             self.graph = self._build_state_graph()
@@ -263,23 +288,62 @@ class StateManager:
         return state
 
     async def _handle_emotion_check(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle emotion check state."""
-        # This would integrate with emotion detection models
+        """Handle emotion check state with real emotion detection."""
         user_state = state["user_state"]
+        message = state["message"]
 
-        # Placeholder emotion detection
-        message = state["message"].lower()
-        if any(word in message for word in ["terrible", "awful", "can't cope", "ужасно", "не могу"]):
+        # Try to use emotion detector if available
+        if self.emotion_detector and self.emotion_detector.model:
+            try:
+                assessment = await self.emotion_detector.assess_emotional_state(message)
+
+                # Update user state based on assessment
+                user_state.emotional_score = 1.0 - assessment["distress_score"]
+                user_state.crisis_level = assessment["distress_score"]
+
+                # Store assessment in state
+                state["emotion_assessed"] = True
+                state["primary_emotion"] = assessment["primary_emotion"]
+                state["emotional_intensity"] = assessment["emotional_intensity"]
+                state["recommended_approach"] = assessment["recommended_approach"]
+
+                logger.info(
+                    "emotion_detected",
+                    user_id=user_state.user_id,
+                    emotion=assessment["primary_emotion"],
+                    distress=assessment["distress_level"],
+                    intensity=round(assessment["emotional_intensity"], 2)
+                )
+
+                return state
+
+            except Exception as e:
+                logger.error("emotion_detection_failed", error=str(e))
+                # Fall through to keyword-based detection
+
+        # Fallback: Keyword-based emotion detection
+        message_lower = message.lower()
+        if any(word in message_lower for word in ["terrible", "awful", "can't cope", "ужасно", "не могу", "покончить", "суицид"]):
             user_state.emotional_score = 0.2
             user_state.crisis_level = 0.7
-        elif any(word in message for word in ["sad", "lonely", "difficult", "грустно", "одиноко"]):
+            state["primary_emotion"] = "grief"
+        elif any(word in message_lower for word in ["sad", "lonely", "difficult", "грустно", "одиноко", "тяжело"]):
             user_state.emotional_score = 0.4
             user_state.crisis_level = 0.3
+            state["primary_emotion"] = "sadness"
         else:
             user_state.emotional_score = 0.6
             user_state.crisis_level = 0.1
+            state["primary_emotion"] = "neutral"
 
         state["emotion_assessed"] = True
+        logger.info(
+            "emotion_detected_fallback",
+            user_id=user_state.user_id,
+            emotion=state.get("primary_emotion"),
+            crisis_level=user_state.crisis_level
+        )
+
         return state
 
     async def _handle_crisis(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -328,16 +392,115 @@ class StateManager:
         return state
 
     async def _handle_technique_selection(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle technique selection state."""
-        state["selected_technique"] = "cognitive_reframing"  # Placeholder
-        state["response"] = "Let's try a cognitive reframing exercise."
+        """Handle technique selection state with intelligent selection."""
+        user_state = state["user_state"]
+        primary_emotion = state.get("primary_emotion", "neutral")
+        distress_level = state.get("distress_level", "moderate")
+
+        # Select appropriate technique based on distress and emotion
+        selected_technique_key = self._select_technique(distress_level, primary_emotion, state)
+        state["selected_technique"] = selected_technique_key
+
+        # Store selection for execution
+        logger.info(
+            "technique_selected",
+            user_id=user_state.user_id,
+            technique=selected_technique_key,
+            distress=distress_level
+        )
+
+        state["response"] = f"Давайте попробуем {self.techniques[selected_technique_key].name}."
         return state
 
     async def _handle_technique_execution(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle technique execution state."""
-        technique = state.get("selected_technique", "active_listening")
-        state["response"] = f"Applying {technique} technique..."
+        """Handle technique execution using real therapeutic techniques."""
+        technique_key = state.get("selected_technique", "validation")
+        technique = self.techniques.get(technique_key)
+
+        if not technique:
+            state["response"] = "Извините, я не могу применить эту технику прямо сейчас."
+            return state
+
+        # Prepare context for technique
+        context = {
+            "primary_emotion": state.get("primary_emotion", "neutral"),
+            "distress_level": state.get("distress_level", "moderate"),
+            "emotional_intensity": state.get("emotional_intensity", 0.5),
+            "user_state": state["user_state"]
+        }
+
+        # Apply the technique
+        try:
+            result = await technique.apply(state["message"], context)
+
+            if result.success:
+                response = result.response
+                if result.follow_up:
+                    response += f"\n\n{result.follow_up}"
+
+                state["response"] = response
+                state["technique_result"] = result.metadata
+
+                # Track technique completion
+                user_state = state["user_state"]
+                if technique_key not in user_state.completed_techniques:
+                    user_state.completed_techniques.append(technique_key)
+
+                logger.info(
+                    "technique_applied",
+                    user_id=user_state.user_id,
+                    technique=technique_key,
+                    success=True
+                )
+            else:
+                state["response"] = "Давайте попробуем другой подход."
+
+        except Exception as e:
+            logger.error("technique_execution_failed", technique=technique_key, error=str(e))
+            state["response"] = "Я здесь, чтобы поддержать вас. Расскажите мне больше о том, что вы чувствуете."
+
         return state
+
+    def _select_technique(
+        self,
+        distress_level: str,
+        primary_emotion: str,
+        state: Dict[str, Any]
+    ) -> str:
+        """
+        Select appropriate technique based on context.
+
+        Args:
+            distress_level: Current distress level (low/moderate/high/crisis)
+            primary_emotion: Detected primary emotion
+            state: Full state dict
+
+        Returns:
+            Technique key to use
+        """
+        # Crisis or high distress: Grounding first
+        if distress_level in ["crisis", "high"]:
+            return "grounding"
+
+        # Check if user wants specific type of help
+        message_lower = state.get("message", "").lower()
+
+        if any(word in message_lower for word in ["упражнение", "техника", "дыхание", "exercise"]):
+            return "grounding"
+
+        if any(word in message_lower for word in ["думаю", "мысли", "считаю", "thinking"]):
+            return "cbt"
+
+        # Default flow based on emotion
+        emotion_to_technique = {
+            "anger": "cbt",  # Reframe angry thoughts
+            "grief": "validation",  # Validate deep pain
+            "sadness": "validation",
+            "fear": "grounding",  # Ground the anxiety
+            "anxiety": "grounding"
+        }
+
+        return emotion_to_technique.get(primary_emotion, "validation")
 
     async def _handle_end_session(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle end session state."""
