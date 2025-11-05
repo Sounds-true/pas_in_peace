@@ -42,3 +42,11 @@ apscheduler>=3.10.0
 # RAG & Embeddings
 sentence-transformers>=2.2.0
 numpy>=1.24.0
+
+# Speech-to-Text (optional - for voice messages)
+# Install with: pip install SpeechRecognition pydub ffmpeg-python
+# SpeechRecognition>=3.10.0
+# pydub>=0.25.1
+
+# Note: Entity extraction uses natasha (already included above)
+# Note: Intent classification is pattern-based (no extra dependencies)

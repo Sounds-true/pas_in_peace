@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, List
 from enum import Enum
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 import asyncio
 
 from langgraph.graph import StateGraph, END
@@ -13,6 +14,9 @@ from src.core.logger import get_logger
 from src.core.config import settings
 from src.safety.guardrails_manager import GuardrailsManager
 from src.nlp.emotion_detector import EmotionDetector
+from src.nlp.entity_extractor import EntityExtractor
+from src.nlp.intent_classifier import IntentClassifier, Intent
+from src.nlp.speech_handler import SpeechHandler
 from src.techniques import (
     CBTReframing,
     GroundingTechnique,
@@ -75,6 +79,11 @@ class StateManager:
         self.guardrails = GuardrailsManager()
         self.emotion_detector = EmotionDetector()
 
+        # Initialize new NLP components
+        self.entity_extractor = EntityExtractor()
+        self.intent_classifier = IntentClassifier()
+        self.speech_handler = SpeechHandler(backend='google', language='ru-RU')
+
         # Initialize therapeutic techniques
         self.techniques = {
             "cbt": CBTReframing(),
@@ -117,6 +126,35 @@ class StateManager:
             except Exception as e:
                 logger.warning("knowledge_retriever_disabled", reason=str(e))
                 # Continue without RAG - will use only predefined responses
+
+            # Initialize entity extractor (optional)
+            try:
+                await self.entity_extractor.initialize()
+                logger.info("entity_extractor_enabled")
+            except Exception as e:
+                logger.warning("entity_extractor_disabled", reason=str(e))
+                # Continue without entity extraction - will work without context enrichment
+
+            # Initialize intent classifier (optional)
+            try:
+                await self.intent_classifier.initialize()
+                logger.info("intent_classifier_enabled")
+            except Exception as e:
+                logger.warning("intent_classifier_disabled", reason=str(e))
+                # Continue without intent classification - will use state machine only
+
+            # Initialize speech handler (optional)
+            try:
+                if self.speech_handler.is_available():
+                    await self.speech_handler.initialize()
+                    logger.info("speech_handler_enabled", backend=self.speech_handler.backend)
+                else:
+                    logger.warning("speech_handler_unavailable",
+                                  message="Install: pip install SpeechRecognition pydub")
+                    self.speech_handler = None
+            except Exception as e:
+                logger.warning("speech_handler_disabled", reason=str(e))
+                self.speech_handler = None
 
             # Build the state graph
             self.graph = self._build_state_graph()
@@ -266,13 +304,52 @@ class StateManager:
             )
             return guardrail_check["response"]
 
+        # Classify intent (optional, graceful degradation)
+        intent_result = None
+        if self.intent_classifier and self.intent_classifier.initialized:
+            try:
+                intent_result = await self.intent_classifier.classify(
+                    message,
+                    context=user_state.context
+                )
+                logger.info("intent_classified",
+                           user_id=user_id,
+                           intent=intent_result.intent.value,
+                           confidence=intent_result.confidence)
+            except Exception as e:
+                logger.warning("intent_classification_failed", error=str(e))
+
+        # Extract entities (optional, graceful degradation)
+        extracted_context = None
+        if self.entity_extractor and self.entity_extractor.initialized:
+            try:
+                extracted_context = await self.entity_extractor.extract(
+                    message,
+                    user_context=user_state.context
+                )
+                # Update user context with extracted entities
+                user_state.context = await self.entity_extractor.update_user_context(
+                    user_id,
+                    extracted_context,
+                    user_state.context
+                )
+                logger.info("entities_extracted",
+                           user_id=user_id,
+                           child_names=extracted_context.child_names,
+                           entities_count=len(extracted_context.entities))
+            except Exception as e:
+                logger.warning("entity_extraction_failed", error=str(e))
+
         # Process through state graph
         try:
-            # Prepare state for graph
+            # Prepare state for graph (enriched with intent and entities)
             graph_state = {
                 "user_id": user_id,
                 "message": message,
                 "user_state": user_state,
+                "intent": intent_result.intent if intent_result else None,
+                "intent_confidence": intent_result.confidence if intent_result else 0.0,
+                "extracted_context": extracted_context,
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -619,3 +696,40 @@ class StateManager:
         except Exception as e:
             logger.error("knowledge_augmentation_failed", error=str(e))
             return base_response
+
+    async def process_voice_message(self, user_id: str, audio_path: Path) -> str:
+        """
+        Process voice message by transcribing and processing as text.
+
+        Args:
+            user_id: User ID
+            audio_path: Path to voice message file
+
+        Returns:
+            Bot response
+        """
+        if not self.speech_handler:
+            return "Извините, обработка голосовых сообщений недоступна. Пожалуйста, напишите текстом."
+
+        try:
+            # Transcribe voice to text
+            transcription = await self.speech_handler.transcribe_telegram_voice(audio_path)
+
+            if not transcription:
+                return "Извините, не удалось распознать речь. Попробуйте записать сообщение ещё раз или напишите текстом."
+
+            logger.info("voice_transcribed",
+                       user_id=user_id,
+                       text_length=len(transcription))
+
+            # Process transcribed text as regular message
+            response = await self.process_message(user_id, transcription)
+
+            # Prepend transcription info
+            return f"🎤 Вы сказали: \"{transcription}\"\n\n{response}"
+
+        except Exception as e:
+            logger.error("voice_message_processing_failed",
+                        user_id=user_id,
+                        error=str(e))
+            return "Извините, произошла ошибка при обработке голосового сообщения. Попробуйте написать текстом."
