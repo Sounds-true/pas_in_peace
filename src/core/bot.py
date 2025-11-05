@@ -15,6 +15,7 @@ from src.core.config import settings
 from src.core.logger import get_logger, log_user_interaction, setup_logging
 from src.safety.crisis_detector import CrisisDetector
 from src.orchestration.state_manager import StateManager
+from src.nlp.pii_protector import PIIProtector
 
 
 logger = get_logger(__name__)
@@ -28,6 +29,7 @@ class PASBot:
         self.app: Optional[Application] = None
         self.crisis_detector = CrisisDetector()
         self.state_manager = StateManager()
+        self.pii_protector = PIIProtector()
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""
@@ -140,7 +142,7 @@ class PASBot:
         await update.message.reply_text(privacy_message)
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle regular text messages."""
+        """Handle regular text messages with PII protection."""
         user = update.effective_user
         user_id = str(user.id)
         message_text = update.message.text
@@ -151,6 +153,30 @@ class PASBot:
             message_type="text",
             message_length=len(message_text)
         )
+
+        # Check for PII in message
+        pii_detected = False
+        if self.pii_protector and hasattr(self.pii_protector, 'analyzer'):
+            try:
+                pii_entities = await self.pii_protector.detect_pii(message_text, language="ru")
+                if pii_entities:
+                    pii_detected = True
+                    logger.warning(
+                        "pii_detected_in_message",
+                        user_id=user_id,
+                        entity_types=[entity.entity_type for entity in pii_entities]
+                    )
+
+                    # Warn user about PII
+                    await update.message.reply_text(
+                        "⚠️ Я заметил, что вы поделились личной информацией "
+                        "(имена, телефоны, адреса и т.д.).\n\n"
+                        "Для вашей безопасности рекомендую избегать указания "
+                        "конкретных личных данных в наших разговорах.\n\n"
+                        "Продолжаю обработку вашего сообщения..."
+                    )
+            except Exception as e:
+                logger.error("pii_detection_failed", error=str(e))
 
         # Check for crisis signals
         is_crisis, confidence = await self.crisis_detector.detect(message_text)
@@ -219,6 +245,13 @@ class PASBot:
         # Initialize components
         await self.crisis_detector.initialize()
         await self.state_manager.initialize()
+
+        # Initialize PII protector (optional)
+        try:
+            await self.pii_protector.initialize()
+            logger.info("pii_protector_enabled")
+        except Exception as e:
+            logger.warning("pii_protector_disabled", reason=str(e))
 
         logger.info("bot_initialized", environment=settings.environment)
 
