@@ -23,6 +23,7 @@ from src.techniques import (
     ValidationTechnique,
     ActiveListening
 )
+from src.techniques.orchestrator import TechniqueOrchestrator
 from src.rag import KnowledgeRetriever, PAKnowledgeBase
 
 
@@ -84,13 +85,16 @@ class StateManager:
         self.intent_classifier = IntentClassifier()
         self.speech_handler = SpeechHandler(backend='google', language='ru-RU')
 
-        # Initialize therapeutic techniques
+        # Initialize therapeutic techniques (legacy support)
         self.techniques = {
             "cbt": CBTReframing(),
             "grounding": GroundingTechnique(),
             "validation": ValidationTechnique(),
             "active_listening": ActiveListening()
         }
+
+        # Initialize new technique orchestrator with advanced selection
+        self.technique_orchestrator = TechniqueOrchestrator()
 
         # Initialize RAG retriever
         self.knowledge_retriever = KnowledgeRetriever()
@@ -484,28 +488,76 @@ class StateManager:
         return state
 
     async def _handle_technique_selection(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle technique selection state with intelligent selection."""
+        """Handle technique selection state with intelligent orchestrator selection."""
         user_state = state["user_state"]
+        message = state["message"]
         primary_emotion = state.get("primary_emotion", "neutral")
-        distress_level = state.get("distress_level", "moderate")
+        emotional_intensity = state.get("emotional_intensity", 0.5)
 
-        # Select appropriate technique based on distress and emotion
-        selected_technique_key = self._select_technique(distress_level, primary_emotion, state)
-        state["selected_technique"] = selected_technique_key
+        # Build context for orchestrator
+        context = {
+            "emotion": primary_emotion,
+            "emotion_intensity": emotional_intensity,
+            "language": "russian",
+            "message_count": user_state.messages_count
+        }
 
-        # Store selection for execution
-        logger.info(
-            "technique_selected",
-            user_id=user_state.user_id,
-            technique=selected_technique_key,
-            distress=distress_level
-        )
+        # Map crisis_level to risk_level for orchestrator
+        if user_state.crisis_level > 0.7:
+            context["risk_level"] = "critical"
+        elif user_state.crisis_level > 0.5:
+            context["risk_level"] = "high"
+        elif user_state.crisis_level > 0.3:
+            context["risk_level"] = "moderate"
+        else:
+            context["risk_level"] = "low"
 
-        state["response"] = f"Давайте попробуем {self.techniques[selected_technique_key].name}."
+        # Use orchestrator for intelligent technique selection and application
+        try:
+            result = await self.technique_orchestrator.select_and_apply_technique(
+                message,
+                context
+            )
+
+            state["technique_result"] = result
+            state["response"] = result.response
+
+            if result.follow_up:
+                state["response"] += f"\n\n{result.follow_up}"
+
+            logger.info(
+                "technique_orchestrated",
+                user_id=user_state.user_id,
+                technique=result.metadata.get("technique_used"),
+                supervision_approved=result.metadata.get("supervision_approved"),
+                supervision_score=result.metadata.get("supervision_score")
+            )
+
+        except Exception as e:
+            logger.error("technique_orchestration_failed", user_id=user_state.user_id, error=str(e))
+            # Fallback to legacy selection
+            distress_level = context.get("risk_level", "moderate")
+            selected_technique_key = self._select_technique(distress_level, primary_emotion, state)
+            state["selected_technique"] = selected_technique_key
+            state["response"] = f"Давайте попробуем {self.techniques[selected_technique_key].name}."
+
         return state
 
     async def _handle_technique_execution(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle technique execution using real therapeutic techniques."""
+        # Check if orchestrator already executed the technique
+        if "technique_result" in state and hasattr(state["technique_result"], "success"):
+            # Technique already applied by orchestrator
+            result = state["technique_result"]
+            if result.success:
+                # Track technique completion
+                user_state = state["user_state"]
+                technique_used = result.metadata.get("technique_used")
+                if technique_used and technique_used not in user_state.completed_techniques:
+                    user_state.completed_techniques.append(technique_used)
+            return state
+
+        # Legacy path: execute technique if not already done by orchestrator
         technique_key = state.get("selected_technique", "validation")
         technique = self.techniques.get(technique_key)
 
