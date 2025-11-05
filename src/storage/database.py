@@ -258,8 +258,19 @@ class DatabaseManager:
         title: Optional[str] = None,
         recipient_role: Optional[str] = None,
         purpose: Optional[str] = None,
+        # Sprint 9 fields
+        letter_type: Optional[str] = None,
+        draft_content: Optional[str] = None,
+        communication_style: Optional[str] = None,
+        toxicity_score: Optional[float] = None,
+        toxicity_details: Optional[dict] = None,
+        toxicity_warnings_ignored: Optional[bool] = None,
+        telegraph_url: Optional[str] = None,
+        telegraph_path: Optional[str] = None,
+        telegraph_access_token: Optional[str] = None,
+        status: Optional[str] = None,
     ) -> Letter:
-        """Create new letter draft."""
+        """Create new letter draft with optional Sprint 9 fields."""
         async with self.session() as db_session:
             letter = Letter(
                 user_id=user_id,
@@ -267,10 +278,33 @@ class DatabaseManager:
                 recipient_role=recipient_role,
                 purpose=purpose,
             )
+
+            # Set Sprint 9 fields if provided
+            if letter_type:
+                letter.letter_type = letter_type
+            if draft_content:
+                letter.draft_content = draft_content
+            if communication_style:
+                letter.communication_style = communication_style
+            if toxicity_score is not None:
+                letter.toxicity_score = toxicity_score
+            if toxicity_details:
+                letter.toxicity_details = toxicity_details
+            if toxicity_warnings_ignored is not None:
+                letter.toxicity_warnings_ignored = toxicity_warnings_ignored
+            if telegraph_url:
+                letter.telegraph_url = telegraph_url
+            if telegraph_path:
+                letter.telegraph_path = telegraph_path
+            if telegraph_access_token:
+                letter.telegraph_access_token = telegraph_access_token
+            if status:
+                letter.status = status
+
             db_session.add(letter)
             await db_session.flush()
 
-            logger.info("letter_created", user_id=user_id, letter_id=letter.id)
+            logger.info("letter_created", user_id=user_id, letter_id=letter.id, letter_type=letter_type)
             return letter
 
     async def update_letter_draft(
@@ -301,6 +335,49 @@ class DatabaseManager:
 
             result = await db_session.execute(stmt)
             return list(result.scalars().all())
+
+    async def update_letter_metadata(
+        self,
+        letter_id: int,
+        toxicity_score: Optional[float] = None,
+        toxicity_details: Optional[dict] = None,
+        toxicity_warnings_ignored: Optional[bool] = None,
+        telegraph_url: Optional[str] = None,
+        telegraph_path: Optional[str] = None,
+        telegraph_access_token: Optional[str] = None,
+        telegraph_versions: Optional[list] = None,
+        communication_style: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> None:
+        """Update Sprint 9 letter metadata."""
+        async with self.session() as db_session:
+            stmt = select(Letter).where(Letter.id == letter_id)
+            result = await db_session.execute(stmt)
+            letter = result.scalar_one_or_none()
+
+            if letter:
+                if toxicity_score is not None:
+                    letter.toxicity_score = toxicity_score
+                if toxicity_details is not None:
+                    letter.toxicity_details = toxicity_details
+                if toxicity_warnings_ignored is not None:
+                    letter.toxicity_warnings_ignored = toxicity_warnings_ignored
+                if telegraph_url:
+                    letter.telegraph_url = telegraph_url
+                if telegraph_path:
+                    letter.telegraph_path = telegraph_path
+                if telegraph_access_token:
+                    letter.telegraph_access_token = telegraph_access_token
+                if telegraph_versions is not None:
+                    letter.telegraph_versions = telegraph_versions
+                if communication_style:
+                    letter.communication_style = communication_style
+                if status:
+                    letter.status = status
+
+                letter.last_edited = datetime.utcnow()
+
+                logger.info("letter_metadata_updated", letter_id=letter_id)
 
     # Cleanup and privacy operations
     async def cleanup_old_data(self, days: int = 90) -> None:
