@@ -115,6 +115,62 @@ class PASBot:
         # Transition to crisis state
         await self.state_manager.transition_to_crisis(user_id)
 
+    async def _send_crisis_response(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        crisis_protocol: str,
+        risk_assessment: dict
+    ) -> None:
+        """Send appropriate crisis response based on protocol type."""
+        user_id = str(update.effective_user.id)
+
+        if crisis_protocol == "suicide_prevention":
+            crisis_message = (
+                "🆘 **Я очень обеспокоен тем, что вы мне сообщили.**\\n\\n"
+                "Ваша безопасность — главный приоритет. Пожалуйста, немедленно обратитесь за профессиональной помощью:\\n\\n"
+                "📞 **Телефон доверия (круглосуточно):**\\n"
+                f"• {settings.crisis_hotline_ru}\\n\\n"
+                "🏥 **Экстренная помощь:**\\n"
+                "• Скорая помощь: 103\\n"
+                "• Полиция: 102\\n"
+                "• Единая служба: 112\\n\\n"
+                "💙 **Я здесь, чтобы поддержать вас, но в критической ситуации необходима помощь специалистов.**"
+            )
+        elif crisis_protocol == "violence_prevention":
+            crisis_message = (
+                "⚠️ **Я понимаю, что вы испытываете сильный гнев.**\\n\\n"
+                "Важно обеспечить безопасность всех. Пожалуйста, сделайте паузу и обратитесь за поддержкой:\\n\\n"
+                "📞 **Помощь в кризисной ситуации:**\\n"
+                f"• Телефон доверия: {settings.crisis_hotline_ru}\\n"
+                "• Полиция (при угрозе насилия): 102\\n\\n"
+                "💡 **Сейчас:**\\n"
+                "• Отойдите от ситуации физически\\n"
+                "• Сделайте несколько глубоких вдохов\\n"
+                "• Позвоните специалисту\\n\\n"
+                "Я здесь, чтобы помочь вам справиться с этими чувствами безопасным способом."
+            )
+        else:
+            # Generic crisis response
+            crisis_message = (
+                "🆘 **Ваше сообщение вызывает серьёзную озабоченность.**\\n\\n"
+                "Пожалуйста, обратитесь за профессиональной помощью:\\n\\n"
+                "📞 **Круглосуточная поддержка:**\\n"
+                f"• {settings.crisis_hotline_ru}\\n\\n"
+                "💙 Я здесь для поддержки, но специалисты смогут помочь вам лучше."
+            )
+
+        await update.message.reply_text(crisis_message)
+
+        # Add recommended action if available
+        if risk_assessment.get("recommended_action"):
+            await update.message.reply_text(
+                f"📋 **Рекомендация:** {risk_assessment['recommended_action']}"
+            )
+
+        # Transition to crisis state
+        await self.state_manager.transition_to_crisis(user_id)
+
     async def privacy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /privacy command."""
         user_id = str(update.effective_user.id)
@@ -178,23 +234,35 @@ class PASBot:
             except Exception as e:
                 logger.error("pii_detection_failed", error=str(e))
 
-        # Check for crisis signals
-        is_crisis, confidence = await self.crisis_detector.detect(message_text)
+        # Check for crisis signals using comprehensive risk assessment
+        risk_assessment = await self.crisis_detector.analyze_risk_factors(
+            message_text,
+            user_history={"user_id": user_id}
+        )
 
-        if is_crisis and confidence > settings.suicidalbert_threshold:
+        # Check if immediate intervention is required
+        if risk_assessment.get("immediate_intervention_required", False):
             # Log safety event
             from src.core.logger import log_safety_event
             log_safety_event(
                 logger,
                 event_type="crisis_detected",
-                severity="critical",
+                severity=risk_assessment.get("risk_level", "critical"),
                 user_id=user_id,
-                confidence=confidence
+                confidence=risk_assessment.get("confidence_scores", {}).get("suicide", 0.0),
+                risk_level=risk_assessment.get("risk_level"),
+                recommended_action=risk_assessment.get("recommended_action")
             )
 
-            # Send crisis response
-            await self.crisis_command(update, context)
+            # Send crisis response with appropriate protocol
+            crisis_protocol = risk_assessment.get("crisis_protocol_type", "suicide_prevention")
+            await self._send_crisis_response(update, context, crisis_protocol, risk_assessment)
             return
+
+        # For high (but not critical) risk, pass risk context to state manager
+        if risk_assessment.get("risk_level") in ["high", "moderate"]:
+            # Store risk assessment in context for state manager
+            context.user_data["risk_assessment"] = risk_assessment
 
         # Process message through state manager
         response = await self.state_manager.process_message(user_id, message_text)
