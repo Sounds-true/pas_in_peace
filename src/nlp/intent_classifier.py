@@ -19,6 +19,13 @@ class Intent(str, Enum):
     LETTER_WRITING = "letter_writing"  # Help with writing letters
     GOAL_SETTING = "goal_setting"  # Setting or tracking goals
     TECHNIQUE_REQUEST = "technique_request"  # Asking for coping techniques
+
+    # Legal Tools (Sprint 4)
+    CONTACT_DIARY = "contact_diary"  # Court-admissible contact documentation
+    BIFF_HELP = "biff_help"  # High-conflict communication help
+    MEDIATION_PREP = "mediation_prep"  # Mediation preparation
+    PARENTING_MODEL = "parenting_model"  # Co-parenting vs Parallel parenting
+
     GRATITUDE = "gratitude"  # Saying thanks, positive feedback
     GREETING = "greeting"  # Hello, starting conversation
     FAREWELL = "farewell"  # Goodbye, ending conversation
@@ -179,6 +186,69 @@ class IntentClassifier:
                 ],
                 'weight': 0.5
             },
+
+            # Legal Tools (Sprint 4)
+            Intent.CONTACT_DIARY: {
+                'keywords': [
+                    'дневник', 'документировать', 'записать встречу', 'контакт с ребенком',
+                    'для суда', 'доказательство', 'фиксировать', 'запись контактов',
+                    'court diary', 'document contact', 'log visit'
+                ],
+                'patterns': [
+                    r'(?:вести|создать|начать)\s+дневник',
+                    r'(?:записать|документировать)\s+(?:встречу|контакт)',
+                    r'для\s+суд',
+                    r'(?:нужно|хочу)\s+фиксировать',
+                ],
+                'weight': 0.8
+            },
+
+            Intent.BIFF_HELP: {
+                'keywords': [
+                    'biff', 'конфликтный', 'ответить', 'как написать', 'агрессивное сообщение',
+                    'высококонфликтный', 'провокация', 'нейтрально ответить',
+                    'не эскалировать', 'деловое общение'
+                ],
+                'patterns': [
+                    r'как\s+(?:ответить|написать)\s+(?:на|бывш|ex)',
+                    r'(?:конфликтн|агрессивн)\w+\s+(?:сообщение|письмо)',
+                    r'(?:не\s+)?эскалиров',
+                    r'деловое?\s+общение',
+                    r'нейтральн\w+\s+ответ',
+                ],
+                'weight': 0.8
+            },
+
+            Intent.MEDIATION_PREP: {
+                'keywords': [
+                    'медиация', 'посредник', 'переговоры', 'подготовка к медиации',
+                    'mediator', 'mediation', 'соглашение', 'готовиться к встрече',
+                    'семейный посредник'
+                ],
+                'patterns': [
+                    r'подготов\w+\s+к\s+(?:медиац|переговор)',
+                    r'(?:идти|иду|пойду)\s+(?:на\s+)?медиац',
+                    r'как\s+(?:подготовиться|готовиться)',
+                    r'что\s+(?:нужно|взять|подготовить)\s+(?:для|на)\s+медиац',
+                ],
+                'weight': 0.85
+            },
+
+            Intent.PARENTING_MODEL: {
+                'keywords': [
+                    'co-parenting', 'parallel parenting', 'совместное воспитание',
+                    'параллельное воспитание', 'модель воспитания', 'как общаться',
+                    'минимизировать контакт', 'сотрудничество', 'высокий конфликт'
+                ],
+                'patterns': [
+                    r'(?:совместн|параллельн)\w+\s+воспитан',
+                    r'(?:co-?parenting|parallel\s+parenting)',
+                    r'как\s+(?:лучше\s+)?(?:воспитывать|общаться)\s+(?:после|при)',
+                    r'(?:модель|стиль)\s+воспитан',
+                    r'(?:какую|какой)\s+(?:модель|систему)\s+(?:выбрать|использовать)',
+                ],
+                'weight': 0.8
+            },
         }
 
     async def initialize(self) -> None:
@@ -316,6 +386,13 @@ class IntentClassifier:
             Intent.LETTER_WRITING: "Помощь с написанием письма",
             Intent.GOAL_SETTING: "Постановка или отслеживание целей",
             Intent.TECHNIQUE_REQUEST: "Запрос терапевтической техники",
+
+            # Legal Tools
+            Intent.CONTACT_DIARY: "Ведение дневника контактов для суда",
+            Intent.BIFF_HELP: "Помощь с BIFF коммуникацией",
+            Intent.MEDIATION_PREP: "Подготовка к медиации",
+            Intent.PARENTING_MODEL: "Выбор модели воспитания (co-parenting/parallel)",
+
             Intent.GRATITUDE: "Благодарность",
             Intent.GREETING: "Приветствие",
             Intent.FAREWELL: "Прощание",
