@@ -1,0 +1,59 @@
+# NeMo Guardrails Configuration
+
+# Model configuration (will be overridden by code)
+models:
+  - type: openai
+    engine: gpt-4-turbo-preview
+    model: gpt-4-turbo-preview
+
+# Rails configuration
+# Note: Flows will be implemented in Sprint 2
+# rails:
+#   input:
+#     flows:
+#       - handle_crisis
+#       - handle_harm_intent
+#   output:
+#     flows:
+#       - child_discussion_redirect
+
+# General configuration
+general:
+  # Enable conversation logs for debugging
+  enable_logging: true
+
+  # Conversation history length
+  max_history_length: 10
+
+  # Enable fact-checking
+  fact_checking: false
+
+# Safety thresholds
+safety:
+  crisis_keywords_sensitivity: high
+  boundary_enforcement: strict
+  pii_detection: enabled
+
+# Response templates
+response_templates:
+  crisis_intervention: |
+    I'm deeply concerned about what you're sharing. Your safety is the top priority.
+
+    Please reach out to:
+    - Russia: 8-800-2000-122 (24/7)
+    - International: 988 (Suicide & Crisis Lifeline)
+
+    Would you like to talk about what's troubling you?
+
+  legal_boundary: |
+    I understand you have legal questions, but I'm not qualified to provide legal advice.
+    For legal matters, please consult with a qualified attorney.
+    I can help you process the emotions around this situation instead.
+
+  privacy_reminder: |
+    For your privacy and safety, please avoid sharing personal identifying information.
+    I can help you without knowing these details.
+
+  manipulation_boundary: |
+    I'm here to support you, but I cannot take responsibility for your choices.
+    Let's focus on healthy coping strategies.
