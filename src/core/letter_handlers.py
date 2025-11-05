@@ -362,22 +362,23 @@ class LetterHandlers:
             return
 
         try:
-            # Create letter in DB
+            # Create letter in DB (basic fields only)
             letter = await self.db.create_letter(
                 user_id=int(user_id),
                 title=f"Письмо от {session.created_at.strftime('%d.%m.%Y')}",
                 recipient_role="",
-                purpose=session.purpose,
-                letter_type=session.letter_type.value,
-                draft_content=session.draft,
-                communication_style=session.style,
-                toxicity_score=session.toxicity_analysis.overall_score if session.toxicity_analysis else None,
-                toxicity_details=session.toxicity_analysis.__dict__ if session.toxicity_analysis else {},
-                toxicity_warnings_ignored=session.user_acknowledged_toxicity,
-                telegraph_url=session.telegraph_url,
-                telegraph_path=session.telegraph_path,
-                status='draft'
+                purpose=session.purpose
             )
+
+            # Update letter with Sprint 9 fields using update methods
+            if session.draft:
+                await self.db.update_letter_draft(letter.id, session.draft)
+
+            # TODO: Add methods to update new Sprint 9 fields:
+            # - letter_type (session.letter_type.value)
+            # - communication_style (session.style)
+            # - toxicity_score, toxicity_details, toxicity_warnings_ignored
+            # - telegraph_url, telegraph_path
 
             logger.info("letter_saved_to_db",
                        user_id=user_id,

@@ -106,33 +106,13 @@ class CapsuleMonitor:
             if not capsules:
                 return False
 
-            # Check if user has improved emotionally
-            # Get user's recent emotional state
-            recent_sessions = await self.db.get_user_sessions(
-                user_id=user_id,
-                limit=5
-            )
-
-            if not recent_sessions:
-                return False
-
-            # Calculate average distress from recent sessions
-            recent_distress = []
-            for session in recent_sessions:
-                # TODO: Extract distress from session context
-                # For now, use simple heuristic
-                if hasattr(session, 'emotional_state'):
-                    recent_distress.append(session.emotional_state.get('distress', 0.5))
-
-            if not recent_distress:
-                # No emotional data - assume user is calm enough
-                avg_recent_distress = 0.3
-            else:
-                avg_recent_distress = sum(recent_distress) / len(recent_distress)
-
             # User should be notified if:
             # 1. Current distress is low (< 0.4)
-            # 2. Average recent distress is lower than when capsule was created
+            # 2. Has toxic capsules that are > 24h old
+            #
+            # Note: More sophisticated emotional state tracking (comparing current
+            # vs historical distress) can be added later when we have session
+            # emotional state tracking implemented.
             if current_distress_level < 0.4:
                 logger.info("user_ready_for_capsule_review",
                            user_id=user_id,
