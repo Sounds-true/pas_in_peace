@@ -30,6 +30,7 @@ class ConversationStateEnum(str, enum.Enum):
     CASUAL_CHAT = "casual_chat"
     LETTER_WRITING = "letter_writing"
     GOAL_TRACKING = "goal_tracking"
+    LEGAL_CONSULTATION = "legal_consultation"
     TECHNIQUE_SELECTION = "technique_selection"
     TECHNIQUE_EXECUTION = "technique_execution"
     END_SESSION = "end_session"

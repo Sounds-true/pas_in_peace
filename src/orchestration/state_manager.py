@@ -25,6 +25,10 @@ from src.techniques import (
 )
 from src.techniques.orchestrator import TechniqueOrchestrator
 from src.rag import KnowledgeRetriever, PAKnowledgeBase
+from src.monitoring import MetricsCollector
+from src.legal import LegalToolsHandler
+from src.storage.database import DatabaseManager
+from src.storage.models import ConversationStateEnum, TherapyPhaseEnum
 
 
 logger = get_logger(__name__)
@@ -40,6 +44,7 @@ class ConversationState(str, Enum):
     CASUAL_CHAT = "casual_chat"
     LETTER_WRITING = "letter_writing"
     GOAL_TRACKING = "goal_tracking"
+    LEGAL_CONSULTATION = "legal_consultation"
     TECHNIQUE_SELECTION = "technique_selection"
     TECHNIQUE_EXECUTION = "technique_execution"
     END_SESSION = "end_session"
@@ -99,11 +104,29 @@ class StateManager:
         # Initialize RAG retriever
         self.knowledge_retriever = KnowledgeRetriever()
 
+        # Initialize metrics collector
+        self.metrics_collector = MetricsCollector()
+
+        # Initialize legal tools handler
+        self.legal_tools = LegalToolsHandler()
+
+        # Initialize database manager
+        self.db = DatabaseManager()
+
         self.initialized = False
 
     async def initialize(self) -> None:
         """Initialize the state graph and dependencies."""
         try:
+            # Initialize database (required for persistence)
+            try:
+                await self.db.initialize()
+                logger.info("database_enabled")
+            except Exception as e:
+                logger.warning("database_disabled", reason=str(e))
+                # Continue without database - will use in-memory only
+                self.db = None
+
             # Try to initialize guardrails (optional for MVP)
             try:
                 await self.guardrails.initialize()
@@ -265,13 +288,70 @@ class StateManager:
         return workflow.compile()
 
     async def initialize_user(self, user_id: str) -> None:
-        """Initialize a new user state."""
+        """Initialize a new user state, loading from database if exists."""
+        # Try to load from database first
+        if self.db:
+            try:
+                db_user = await self.db.get_or_create_user(user_id)
+                # Convert DB model to UserState
+                user_state = UserState(
+                    user_id=user_id,
+                    current_state=ConversationState(db_user.current_state.value),
+                    therapy_phase=TherapyPhase(db_user.therapy_phase.value),
+                    emotional_score=db_user.emotional_score,
+                    crisis_level=db_user.crisis_level,
+                    messages_count=db_user.total_messages,
+                    session_start=db_user.created_at,
+                    last_activity=db_user.last_activity,
+                    context=db_user.context or {},
+                )
+                self.user_states[user_id] = user_state
+                logger.info("user_loaded_from_db", user_id=user_id)
+                return
+            except Exception as e:
+                logger.warning("user_load_from_db_failed", user_id=user_id, error=str(e))
+                # Fall through to create new in-memory state
+
+        # Create new in-memory state
         self.user_states[user_id] = UserState(user_id=user_id)
-        logger.info("user_initialized", user_id=user_id)
+        logger.info("user_initialized_in_memory", user_id=user_id)
 
     async def get_user_state(self, user_id: str) -> Optional[UserState]:
-        """Get user state."""
-        return self.user_states.get(user_id)
+        """Get user state, loading from database if not in cache."""
+        # Check in-memory cache first
+        if user_id in self.user_states:
+            return self.user_states[user_id]
+
+        # Try to load from database
+        if self.db:
+            try:
+                await self.initialize_user(user_id)
+                return self.user_states.get(user_id)
+            except Exception as e:
+                logger.warning("get_user_state_failed", user_id=user_id, error=str(e))
+
+        return None
+
+    async def save_user_state(self, user_state: UserState) -> None:
+        """Save user state to database."""
+        if not self.db:
+            return  # No database available, skip save
+
+        try:
+            # Update user in database
+            await self.db.update_user_state(
+                telegram_id=user_state.user_id,
+                state=user_state.current_state.value,
+                emotional_score=user_state.emotional_score,
+                crisis_level=user_state.crisis_level,
+                therapy_phase=user_state.therapy_phase.value,
+            )
+            logger.debug("user_state_saved", user_id=user_state.user_id)
+        except Exception as e:
+            logger.error("user_state_save_failed",
+                        user_id=user_state.user_id,
+                        error=str(e))
+            # Don't raise - continue even if save fails
 
     async def transition_to_crisis(self, user_id: str) -> None:
         """Immediately transition user to crisis state."""
@@ -281,9 +361,14 @@ class StateManager:
             user_state.crisis_level = 1.0
             user_state.therapy_phase = TherapyPhase.CRISIS
             logger.warning("user_crisis_transition", user_id=user_id)
+            # Save to database
+            await self.save_user_state(user_state)
 
     async def process_message(self, user_id: str, message: str) -> str:
         """Process user message through the state machine."""
+        import time
+        start_time = time.time()
+
         if not self.initialized:
             await self.initialize()
 
@@ -305,6 +390,10 @@ class StateManager:
                 "message_blocked_by_guardrails",
                 user_id=user_id,
                 policy=guardrail_check["triggered_policy"]
+            )
+            # Record guardrails activation
+            await self.metrics_collector.record_guardrails_activation(
+                rule_triggered=guardrail_check["triggered_policy"]
             )
             return guardrail_check["response"]
 
@@ -344,6 +433,55 @@ class StateManager:
             except Exception as e:
                 logger.warning("entity_extraction_failed", error=str(e))
 
+        # Handle legal tool intents directly (bypass state graph for legal consultations)
+        if intent_result and intent_result.intent in [
+            Intent.CONTACT_DIARY,
+            Intent.BIFF_HELP,
+            Intent.MEDIATION_PREP,
+            Intent.PARENTING_MODEL
+        ]:
+            try:
+                logger.info("legal_intent_detected",
+                           user_id=user_id,
+                           intent=intent_result.intent.value)
+
+                # Update state to legal consultation
+                user_state.current_state = ConversationState.LEGAL_CONSULTATION
+
+                # Handle through legal tools
+                legal_response = await self.legal_tools.handle_intent(
+                    intent=intent_result.intent,
+                    message=message,
+                    user_id=user_id,
+                    context=user_state.context
+                )
+
+                # Record metrics
+                await self.metrics_collector.record_message(
+                    user_id=user_id,
+                    technique_used=f"legal_{intent_result.intent.value}",
+                    emotion_detected=None
+                )
+
+                # Update message history
+                user_state.message_history.append(SystemMessage(content=legal_response.response_text))
+
+                # Record response time
+                response_time = time.time() - start_time
+                await self.metrics_collector.record_response_time(response_time)
+
+                # Save user state to database
+                await self.save_user_state(user_state)
+
+                return legal_response.response_text
+
+            except Exception as e:
+                logger.error("legal_tools_handling_failed",
+                           user_id=user_id,
+                           intent=intent_result.intent.value,
+                           error=str(e))
+                # Fall through to normal processing
+
         # Process through state graph
         try:
             # Prepare state for graph (enriched with intent and entities)
@@ -371,10 +509,27 @@ class StateManager:
             # Update message history
             user_state.message_history.append(SystemMessage(content=safe_response))
 
+            # Record metrics for successful message processing
+            response_time = time.time() - start_time
+            await self.metrics_collector.record_response_time(response_time)
+
+            # Record message with technique info if available
+            technique_used = user_state.completed_techniques[-1] if user_state.completed_techniques else None
+            await self.metrics_collector.record_message(
+                user_id=user_id,
+                technique_used=technique_used,
+                emotion_detected=None  # Could be enhanced with emotion name
+            )
+
+            # Save user state to database
+            await self.save_user_state(user_state)
+
             return safe_response
 
         except Exception as e:
             logger.error("message_processing_failed", user_id=user_id, error=str(e))
+            # Record error
+            await self.metrics_collector.record_error(error_type=str(type(e).__name__))
             return "I apologize, I'm having trouble processing your message. Please try again."
 
     # State handlers
