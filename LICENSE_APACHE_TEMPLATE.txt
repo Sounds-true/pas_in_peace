@@ -1,0 +1,97 @@
+Apache License
+Version 2.0, January 2004
+http://www.apache.org/licenses/
+
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+[Full Apache 2.0 text - standard]
+
+---
+
+MEDICAL SOFTWARE DISCLAIMER AND ADDITIONAL TERMS
+
+This software is designed for use as a therapeutic support tool and is subject to
+the following additional terms and conditions:
+
+1. NOT A MEDICAL DEVICE
+   This software is NOT an FDA-approved or CE-marked medical device. It has not
+   undergone regulatory review for medical use.
+
+2. NOT A SUBSTITUTE FOR PROFESSIONAL CARE
+   This software is NOT a substitute for professional mental health care, therapy,
+   or medical treatment. Users experiencing mental health crises should immediately
+   contact emergency services or mental health professionals.
+
+3. CLINICAL OVERSIGHT REQUIRED
+   Any deployment of this software for therapeutic purposes MUST be under the
+   supervision of licensed mental health professionals. The software should only be
+   used as a supplementary tool, not as a standalone treatment.
+
+4. RESEARCH AND EDUCATIONAL USE
+   This software is primarily intended for research and educational purposes.
+   Production deployment requires:
+   - Clinical Advisory Board approval
+   - Ongoing professional supervision
+   - Regular safety audits
+   - Adverse event monitoring
+
+5. HIGH-RISK POPULATION
+   This software is designed for use with individuals experiencing parental
+   alienation, a vulnerable population that may be experiencing significant
+   psychological distress. Extra caution and professional oversight are mandatory.
+
+6. CRISIS PROTOCOLS
+   While this software includes crisis detection and suicide risk assessment features
+   (Columbia-SSRS), these are NOT replacements for professional crisis intervention.
+   Users in crisis MUST be directed to appropriate emergency services.
+
+7. LIABILITY LIMITATION
+   In addition to the limitations in the Apache License, users of this software
+   acknowledge that:
+   - Mental health software carries inherent risks
+   - The developers assume NO LIABILITY for harm resulting from use of this software
+   - Users deploy this software AT THEIR OWN RISK
+   - Professional insurance and legal consultation are recommended before deployment
+
+8. REPORTING REQUIREMENT
+   Users deploying this software in therapeutic contexts agree to:
+   - Report adverse events to the original developers
+   - Maintain ethical review board oversight where applicable
+   - Document any modifications to safety features
+   - Preserve all crisis detection and safety protocols
+
+9. MODIFICATION RESTRICTIONS
+   While the Apache 2.0 license permits modifications, users are STRONGLY DISCOURAGED
+   from:
+   - Removing or disabling crisis detection features
+   - Modifying suicide risk assessment protocols
+   - Reducing safety checks or guardrails
+   - Using this software without professional oversight
+
+10. PROFESSIONAL STANDARDS
+    Users deploying this software must adhere to:
+    - APA (American Psychological Association) ethical guidelines
+    - WHO guidelines for AI in healthcare
+    - Local mental health practice regulations
+    - HIPAA/GDPR privacy requirements (where applicable)
+
+BY USING THIS SOFTWARE, YOU ACKNOWLEDGE THAT YOU HAVE READ AND UNDERSTOOD THESE
+ADDITIONAL TERMS AND AGREE TO USE THE SOFTWARE ONLY IN ACCORDANCE WITH PROFESSIONAL
+MENTAL HEALTH STANDARDS AND UNDER APPROPRIATE CLINICAL SUPERVISION.
+
+FOR QUESTIONS OR TO REPORT SAFETY CONCERNS: [Your contact email]
+
+---
+
+Copyright 2025 Sounds-true
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
