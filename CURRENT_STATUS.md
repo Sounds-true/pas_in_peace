@@ -2,7 +2,7 @@
 
 **Дата:** 2025-11-06
 **Ветка:** main
-**Версия:** v0.7 (70% от полного плана)
+**Версия:** v0.85 (85% от полного плана) - Sprint 4 merged! ✅
 
 ---
 
@@ -38,16 +38,19 @@
 
 ---
 
+### ✅ Sprint 4: Legal & Practical Tools (100%) - NEW!
+- Contact diary system (court-admissible)
+- BIFF templates (high-conflict communication)
+- Mediation preparation workflows
+- Co-parenting vs Parallel parenting advisor
+
+**Файлы:** `src/legal/`, `tests/test_legal_tools.py`
+**Lines of code:** 3,912 новых строк
+**Merge:** PR #6 ✅
+
+---
+
 ## 🚧 Что в разработке (не в main)
-
-### Sprint 4: Legal & Practical Tools (в ветке)
-**Ветка:** claude/review-safety-protocols-011CUqbQc2eb7S731CdMttL9
-- Contact diary system
-- BIFF templates
-- Mediation preparation
-- Parallel parenting tools
-
-**Статус:** Код написан, не merged
 
 ### Sprint 5: Validation & Metrics (частично)
 - ⚠️ Базовые safety tests есть
@@ -61,10 +64,11 @@
 | Метрика | Значение |
 |---------|----------|
 | Security Score | 84/100 (было 40/100) |
-| Code Coverage | ~60% |
-| Lines of Code | ~5,200 production |
+| Code Coverage | ~65% |
+| Lines of Code | ~9,100 production (+3,900 from Sprint 4) |
 | Emotional States | 7/7 covered |
 | Therapeutic Techniques | 7 (planned 4) |
+| Legal Tools | 4/4 implemented ✅ NEW! |
 
 ---
 
@@ -72,10 +76,10 @@
 
 ### Немедленно (эта сессия)
 1. ✅ Упростить структуру планов (modular docs)
-2. ⏳ Решить судьбу Sprint 4 (merge или отложить)
-3. ⏳ Создать четкий план для следующего спринта
+2. ✅ Sprint 4 merged successfully!
+3. 🎯 **Начать Sprint 5: Validation & Metrics**
 
-### Ближайшие 1-2 недели
+### Ближайшие 1-2 недели (Sprint 5)
 1. Scenario-based testing
 2. Integration tests
 3. Clinical advisory board formation
@@ -115,7 +119,8 @@
 
 **Для быстрого понимания где мы:**
 - ✅ Core safety & therapeutic bot: **РАБОТАЕТ**
-- ✅ Production-ready: **НЕТ** (нужен Clinical Advisory Board)
+- ✅ Legal & practical tools: **РАБОТАЕТ** ✨ NEW!
+- ⚠️ Production-ready: **ПОЧТИ** (нужен Sprint 5 + Clinical Advisory Board)
 - ✅ Готов к therapist review: **ДА**
 
-**Главный вопрос:** Что делать дальше - Sprint 4 (legal tools) или Sprint 5 (metrics)?
+**Следующий шаг:** 🎯 Sprint 5 (Validation & Metrics) - последний спринт перед production!
