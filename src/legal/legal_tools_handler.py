@@ -205,7 +205,7 @@ class LegalToolsHandler:
             response_text += "\n".join(dos_donts['DO'])
 
             response_text += "\n\n**DON'T (Не делать):**\n"
-            response_text += "\n".join(dos_donts['DON'T'])
+            response_text += "\n".join(dos_donts["DON'T"])
 
             return LegalToolResponse(
                 tool_type="biff",
