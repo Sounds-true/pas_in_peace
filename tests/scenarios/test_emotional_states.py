@@ -23,9 +23,10 @@ import pytest
 from pathlib import Path
 from typing import Dict, List, Any
 from dataclasses import dataclass
+import logging
 
-# We'll need to import the actual bot components
-# For now, creating structure that will work when bot is integrated
+# Setup logger
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -81,12 +82,23 @@ class ScenarioLoader:
 class ScenarioTester:
     """Runs scenarios through the bot and validates responses."""
 
-    def __init__(self):
-        # TODO: Initialize bot components when available
-        # self.bot = PASBot()
-        # self.emotion_detector = EmotionDetector()
-        # self.crisis_detector = CrisisDetector()
-        pass
+    def __init__(self, use_real_bot: bool = True):
+        """
+        Initialize scenario tester.
+
+        Args:
+            use_real_bot: If True, use real bot adapter. If False, use mocks (for testing framework itself)
+        """
+        self.use_real_bot = use_real_bot
+        self.bot_adapter = None
+
+        if use_real_bot:
+            try:
+                from .bot_adapter import BotTestAdapter
+                self.bot_adapter = BotTestAdapter()
+            except Exception as e:
+                logger.warning(f"Could not initialize bot adapter: {e}")
+                self.use_real_bot = False
 
     async def run_scenario(self, scenario: Dict) -> ScenarioTestResult:
         """
@@ -101,26 +113,46 @@ class ScenarioTester:
         errors = []
         warnings = []
 
-        # TODO: Replace with actual bot call
-        # For now, return mock result for structure validation
+        # Get bot response
+        if self.use_real_bot and self.bot_adapter:
+            # Use real bot
+            try:
+                bot_response = await self.bot_adapter.process_message(
+                    user_id=999,  # Test user
+                    message=scenario['input'],
+                    context={'scenario_context': scenario.get('context', {})}
+                )
 
-        # This is where we would call:
-        # response = await self.bot.process_message(
-        #     user_id=999,  # Test user
-        #     message=scenario['input'],
-        #     context=scenario.get('context', {})
-        # )
+                detected_emotion = bot_response.detected_emotion or "unknown"
+                techniques_used = bot_response.techniques_used or []
+                response_text = bot_response.text
+                quality_scores = bot_response.quality_scores or {
+                    'empathy': 0.0,
+                    'safety': 0.0,
+                    'therapeutic_value': 0.0
+                }
+                crisis_detected = bot_response.crisis_detected
 
-        # Mock response for now
-        detected_emotion = "unknown"
-        techniques_used = []
-        response_text = "Mock response"
-        quality_scores = {
-            'empathy': 0.0,
-            'safety': 0.0,
-            'therapeutic_value': 0.0
-        }
-        crisis_detected = False
+            except Exception as e:
+                errors.append(f"Bot processing failed: {str(e)}")
+                # Return error result
+                detected_emotion = "error"
+                techniques_used = []
+                response_text = f"Error: {str(e)}"
+                quality_scores = {'empathy': 0.0, 'safety': 0.0, 'therapeutic_value': 0.0}
+                crisis_detected = False
+
+        else:
+            # Mock response for framework testing
+            detected_emotion = "unknown"
+            techniques_used = []
+            response_text = "Mock response (bot not initialized)"
+            quality_scores = {
+                'empathy': 0.0,
+                'safety': 0.0,
+                'therapeutic_value': 0.0
+            }
+            crisis_detected = False
 
         # Validate results against expectations
         errors.extend(self._validate_emotion(
@@ -237,8 +269,14 @@ def scenario_loader():
 
 @pytest.fixture
 def scenario_tester():
-    """Fixture providing scenario tester."""
-    return ScenarioTester()
+    """Fixture providing scenario tester with real bot."""
+    return ScenarioTester(use_real_bot=True)
+
+
+@pytest.fixture
+def mock_scenario_tester():
+    """Fixture providing scenario tester with mocks (for framework tests)."""
+    return ScenarioTester(use_real_bot=False)
 
 
 class TestEmotionalStates:
@@ -424,7 +462,7 @@ class TestEmotionalStates:
             assert thresholds.get('safety', 0) >= 0.9, \
                 f"Crisis scenario {scenario['id']} has low safety threshold"
 
-    def test_scenario_structure_validation(self, scenario_loader):
+    def test_scenario_structure_validation(self, scenario_loader, mock_scenario_tester):
         """Validate that all scenarios have required fields."""
         all_scenarios = scenario_loader.get_scenarios()
 
