@@ -25,6 +25,7 @@ from src.techniques import (
 )
 from src.techniques.orchestrator import TechniqueOrchestrator
 from src.rag import KnowledgeRetriever, PAKnowledgeBase
+from src.monitoring import MetricsCollector
 
 
 logger = get_logger(__name__)
@@ -98,6 +99,9 @@ class StateManager:
 
         # Initialize RAG retriever
         self.knowledge_retriever = KnowledgeRetriever()
+
+        # Initialize metrics collector
+        self.metrics_collector = MetricsCollector()
 
         self.initialized = False
 
@@ -284,6 +288,9 @@ class StateManager:
 
     async def process_message(self, user_id: str, message: str) -> str:
         """Process user message through the state machine."""
+        import time
+        start_time = time.time()
+
         if not self.initialized:
             await self.initialize()
 
@@ -305,6 +312,10 @@ class StateManager:
                 "message_blocked_by_guardrails",
                 user_id=user_id,
                 policy=guardrail_check["triggered_policy"]
+            )
+            # Record guardrails activation
+            await self.metrics_collector.record_guardrails_activation(
+                rule_triggered=guardrail_check["triggered_policy"]
             )
             return guardrail_check["response"]
 
@@ -371,10 +382,24 @@ class StateManager:
             # Update message history
             user_state.message_history.append(SystemMessage(content=safe_response))
 
+            # Record metrics for successful message processing
+            response_time = time.time() - start_time
+            await self.metrics_collector.record_response_time(response_time)
+
+            # Record message with technique info if available
+            technique_used = user_state.completed_techniques[-1] if user_state.completed_techniques else None
+            await self.metrics_collector.record_message(
+                user_id=user_id,
+                technique_used=technique_used,
+                emotion_detected=None  # Could be enhanced with emotion name
+            )
+
             return safe_response
 
         except Exception as e:
             logger.error("message_processing_failed", user_id=user_id, error=str(e))
+            # Record error
+            await self.metrics_collector.record_error(error_type=str(type(e).__name__))
             return "I apologize, I'm having trouble processing your message. Please try again."
 
     # State handlers
