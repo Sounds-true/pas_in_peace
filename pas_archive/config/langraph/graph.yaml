@@ -1,0 +1,187 @@
+# LangGraph State Machine Configuration
+# Defines the conversation flow and state transitions
+
+version: "1.0"
+name: "PAS_Bot_Graph"
+description: "Therapeutic bot for alienated parents support"
+
+# State definitions
+states:
+  START:
+    description: "Initial conversation state"
+    transitions:
+      - to: EMOTION_CHECK
+        condition: "user_input_received"
+
+  EMOTION_CHECK:
+    description: "Analyze user emotional state"
+    tools:
+      - GoEmotions
+      - SuicidalBERT
+    transitions:
+      - to: CRISIS_INTERVENTION
+        condition: "crisis_detected"
+      - to: HIGH_DISTRESS
+        condition: "high_distress_score"
+      - to: MODERATE_SUPPORT
+        condition: "moderate_distress"
+      - to: CASUAL_CHAT
+        condition: "low_distress"
+
+  CRISIS_INTERVENTION:
+    description: "Immediate crisis support"
+    priority: HIGHEST
+    tools:
+      - CrisisProtocol
+      - ResourceProvider
+    transitions:
+      - to: CRISIS_STABILIZATION
+        condition: "user_engaged"
+      - to: EMERGENCY_ESCALATION
+        condition: "immediate_danger"
+
+  HIGH_DISTRESS:
+    description: "Intensive emotional support"
+    techniques:
+      - CBT_Grounding
+      - IFS_Parts_Work
+      - Validation
+    transitions:
+      - to: TECHNIQUE_SELECTION
+        condition: "user_receptive"
+      - to: EMOTION_CHECK
+        condition: "reassess_needed"
+
+  MODERATE_SUPPORT:
+    description: "Standard therapeutic engagement"
+    techniques:
+      - Active_Listening
+      - Cognitive_Reframing
+      - Goal_Setting
+    transitions:
+      - to: TECHNIQUE_SELECTION
+        condition: "technique_requested"
+      - to: LETTER_WRITING
+        condition: "letter_requested"
+      - to: GOAL_TRACKING
+        condition: "goal_mentioned"
+
+  CASUAL_CHAT:
+    description: "Low-intensity supportive conversation"
+    transitions:
+      - to: EMOTION_CHECK
+        condition: "emotional_shift"
+      - to: END_SESSION
+        condition: "goodbye_detected"
+
+  TECHNIQUE_SELECTION:
+    description: "Choose appropriate therapeutic technique"
+    selector: "MABWiser"
+    options:
+      - CBT_REFRAMING
+      - NVC_COMMUNICATION
+      - IFS_DIALOGUE
+      - MI_EXPLORATION
+      - GRIEF_PROCESSING
+    transitions:
+      - to: TECHNIQUE_EXECUTION
+        condition: "technique_selected"
+
+  TECHNIQUE_EXECUTION:
+    description: "Apply selected therapeutic technique"
+    transitions:
+      - to: TECHNIQUE_FEEDBACK
+        condition: "technique_completed"
+      - to: TECHNIQUE_SELECTION
+        condition: "technique_ineffective"
+
+  LETTER_WRITING:
+    description: "Guided letter writing process"
+    substates:
+      LETTER_PURPOSE:
+        description: "Identify letter goal"
+      LETTER_EMOTION:
+        description: "Process emotions to express"
+      LETTER_DRAFT:
+        description: "Generate initial draft"
+      LETTER_REVIEW:
+        description: "Review with BIFF/NVC principles"
+      LETTER_FINALIZE:
+        description: "Final edits and storage"
+    transitions:
+      - to: LETTER_SAVED
+        condition: "user_approves"
+      - to: LETTER_DRAFT
+        condition: "revision_requested"
+
+  GOAL_TRACKING:
+    description: "Track and update user goals"
+    tools:
+      - GoalManager
+      - ProgressTracker
+    transitions:
+      - to: GOAL_CELEBRATION
+        condition: "milestone_reached"
+      - to: GOAL_PROBLEM_SOLVING
+        condition: "blocker_identified"
+      - to: MODERATE_SUPPORT
+        condition: "continue_conversation"
+
+  END_SESSION:
+    description: "Graceful conversation ending"
+    actions:
+      - save_session_summary
+      - schedule_followup
+      - provide_resources
+    transitions:
+      - to: START
+        condition: "new_session"
+
+# Global handlers (can interrupt any state)
+handlers:
+  CRISIS_DETECTION:
+    trigger: "SuicidalBERT.score > 0.7"
+    action: "immediate_transition"
+    target: CRISIS_INTERVENTION
+
+  LEGAL_BOUNDARY:
+    trigger: "legal_advice_detected"
+    action: "invoke_guardrail"
+    response: "legal_advice_boundary"
+
+  PRIVACY_PROTECTION:
+    trigger: "PII_detected"
+    action: "invoke_guardrail"
+    response: "privacy_reminder"
+
+# Phase management
+phases:
+  PHASE_1_CRISIS:
+    states: [CRISIS_INTERVENTION, CRISIS_STABILIZATION]
+    duration: "1-2 weeks"
+    focus: "Safety and stabilization"
+
+  PHASE_2_UNDERSTANDING:
+    states: [HIGH_DISTRESS, MODERATE_SUPPORT, TECHNIQUE_EXECUTION]
+    duration: "2-4 weeks"
+    focus: "Emotional processing and insight"
+
+  PHASE_3_ACTION:
+    states: [LETTER_WRITING, GOAL_TRACKING, TECHNIQUE_EXECUTION]
+    duration: "4-8 weeks"
+    focus: "Skill building and communication"
+
+  PHASE_4_SUSTAINABILITY:
+    states: [GOAL_TRACKING, CASUAL_CHAT, MODERATE_SUPPORT]
+    duration: "Ongoing"
+    focus: "Maintenance and growth"
+
+# Metrics to track
+metrics:
+  - emotional_intensity
+  - crisis_incidents
+  - techniques_used
+  - goals_completed
+  - letters_written
+  - engagement_score
+  - therapeutic_alliance

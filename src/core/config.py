@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # Model Configuration
     suicidalbert_threshold: float = Field(0.7, ge=0.0, le=1.0, description="Threshold for crisis detection")
-    emotion_detection_model: str = Field("seara/rubert-base-go-emotions", description="Emotion detection model")
+    emotion_detection_model: str = Field("seara/rubert-tiny2-russian-emotion-detection-ru-go-emotions", description="Emotion detection model")
 
     # Rate Limiting
     max_messages_per_user_per_day: int = Field(100, description="Daily message limit per user")

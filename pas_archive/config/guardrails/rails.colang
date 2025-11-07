@@ -1,0 +1,123 @@
+# NeMo Guardrails Configuration for PAS Bot
+# Crisis and Safety Protocol Definition
+
+define user express suicidal thoughts
+  "I want to end it all"
+  "I don't want to live anymore"
+  "хочу покончить с собой"
+  "не хочу больше жить"
+  "лучше бы меня не было"
+
+define user express harm to others
+  "I want to hurt"
+  "I will kill"
+  "я убью"
+  "причиню вред"
+
+define user request illegal activity
+  "how to hack"
+  "где купить наркотики"
+  "how to make a bomb"
+
+define user request legal advice
+  "can I sue"
+  "is it legal to"
+  "какие у меня права"
+  "можно ли подать в суд"
+
+define bot offer crisis support
+  "I'm deeply concerned about what you're sharing. Your safety is the top priority."
+  "Here are crisis resources that can provide immediate support:"
+  "- Russia: 8-800-2000-122 (24/7)"
+  "- International: 988 (Suicide & Crisis Lifeline)"
+  "Would you like to talk about what's troubling you?"
+
+define bot decline legal advice
+  "I understand you have legal questions, but I'm not qualified to provide legal advice."
+  "For legal matters, please consult with a qualified attorney."
+  "I can help you process the emotions around this situation instead."
+
+define bot decline harmful request
+  "I cannot and will not provide information that could be used to harm yourself or others."
+  "If you're struggling, I'm here to listen and support you emotionally."
+
+# Crisis Flow
+define flow handle_crisis
+  user express suicidal thoughts
+  bot offer crisis support
+  $crisis_handled = True
+
+define flow handle_harm_intent
+  user express harm to others
+  bot decline harmful request
+  bot offer crisis support
+  $escalate_to_authorities = True
+
+define flow handle_legal_request
+  user request legal advice
+  bot decline legal advice
+
+define flow handle_illegal_request
+  user request illegal activity
+  bot decline harmful request
+
+# Topic Boundaries
+define user discuss child directly
+  "мой ребенок сказал"
+  "my child told me"
+  "дочь говорит"
+  "сын сделал"
+
+define bot redirect to parent focus
+  "I understand this is about your child. Let's focus on your feelings and how you're processing this."
+  "How are YOU feeling about this situation?"
+
+define flow child_discussion_redirect
+  user discuss child directly
+  bot redirect to parent focus
+
+# Therapy Boundaries
+define user request diagnosis
+  "do I have depression"
+  "am I bipolar"
+  "у меня шизофрения?"
+  "это ПТСР?"
+
+define bot decline diagnosis
+  "I cannot provide medical or psychological diagnoses."
+  "These concerns are best discussed with a licensed mental health professional."
+  "I can help you explore your feelings and experiences though."
+
+define flow diagnosis_boundary
+  user request diagnosis
+  bot decline diagnosis
+
+# Manipulation Detection
+define user manipulative pattern
+  "you have to help me or else"
+  "если не поможешь, я"
+  "it's your fault if"
+
+define bot assert boundaries
+  "I'm here to support you, but I cannot take responsibility for your choices."
+  "Let's focus on healthy coping strategies."
+
+define flow handle_manipulation
+  user manipulative pattern
+  bot assert boundaries
+
+# Privacy Protection
+define user share personal details
+  "my name is"
+  "I live at"
+  "my phone number"
+  "меня зовут"
+  "мой адрес"
+
+define bot privacy reminder
+  "For your privacy and safety, please avoid sharing personal identifying information."
+  "I can help you without knowing these details."
+
+define flow privacy_protection
+  user share personal details
+  bot privacy reminder

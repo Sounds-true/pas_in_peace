@@ -47,16 +47,19 @@ class PIIProtector:
 
             # Create registry with custom recognizers
             registry = RecognizerRegistry()
-            registry.load_predefined_recognizers(nlp_engine=nlp_engine)
+            # Load predefined recognizers only for English (Presidio limitation)
+            registry.load_predefined_recognizers(
+                nlp_engine=nlp_engine,
+                languages=["en"]
+            )
 
             # Add custom Russian recognizers
             self._add_russian_recognizers(registry)
 
-            # Initialize analyzer
+            # Initialize analyzer (supported languages inferred from registry and nlp_engine)
             self.analyzer = AnalyzerEngine(
                 registry=registry,
-                nlp_engine=nlp_engine,
-                supported_languages=self.supported_languages
+                nlp_engine=nlp_engine
             )
 
             # Initialize anonymizer
