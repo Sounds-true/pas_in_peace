@@ -8,7 +8,7 @@ from pathlib import Path
 import asyncio
 
 from langgraph.graph import StateGraph, END
-from langchain.schema import BaseMessage, HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 
 from src.core.logger import get_logger
 from src.core.config import settings
