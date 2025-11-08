@@ -1,6 +1,6 @@
 # PAS Bot - Development Roadmap & Technical Specification
 
-## 📋 Текущее Состояние (v0.2.0 - Working MVP)
+## 📋 Текущее Состояние (v0.3.0 - Enhanced MVP)
 
 ### ✅ Что Работает
 
@@ -18,22 +18,57 @@
 - [x] **Conversation Memory** - передача последних 10 сообщений в OpenAI
 - [x] **Stage-Based Progression** - этапы диалога (1-2: listening, 3-5: understanding, 6+: action)
 - [x] **Supervisor Agent** - контроль качества ответов (empathy, safety, boundaries)
-- [x] **Keyword-based Emotion Detection** - базовая детекция эмоций и тем
-- [x] **Keyword-based Crisis Detection** - обнаружение суицидальных мыслей и угроз насилия
+- [x] **Emotion Detection** - ML-based с fallback на keyword (✅ NEW - 2025-11-08)
+- [x] **Entity Extraction** - Natasha NER с fallback на regex (✅ NEW - 2025-11-08)
+- [x] **Knowledge Retrieval (RAG)** - Semantic search с fallback на keyword (✅ NEW - 2025-11-08)
+- [x] **Crisis Detection** - keyword-based (надёжный и быстрый)
 
-#### Therapeutic Techniques (Реализованы, но не все используются)
+#### Therapeutic Techniques (Все реализованы и активны)
 - [x] Active Listening (используется всегда)
 - [x] CBT Reframing
 - [x] Grounding Techniques
 - [x] IFS Parts Work
 - [x] Validation
-- [x] Letter Writing Prompts (базовая версия)
+- [x] **Letter Writing Flow** - полный multi-turn dialogue (✅ NEW - 2025-11-08)
+- [x] **Goal Tracking** - SMART framework с автоматическими триггерами (✅ NEW - 2025-11-08)
 
 ---
 
-### ❌ Что Отключено (Причины и Решения)
+### ❌ Что Отключено / 🟢 Что Было Исправлено
 
-#### 1. Guardrails (`src/guardrails/`)
+#### ✅ Entity Extractor - ВКЛЮЧЕН (2025-11-08)
+**Старый статус**: Disabled (зависал при загрузке Natasha)
+**Новое решение**: ✅ Добавлен timeout 10s + fallback на regex
+
+**Реализовано**:
+- ✅ Timeout protection для Natasha initialization
+- ✅ ThreadPoolExecutor для неблокирующей загрузки
+- ✅ Graceful fallback на regex-based extraction
+- ✅ Re-enabled в StateManager
+
+#### ✅ Knowledge Retriever - ВКЛЮЧЕН (2025-11-08)
+**Старый статус**: Disabled (зависал при загрузке SentenceTransformers)
+**Новое решение**: ✅ Добавлен timeout 20s + fallback на keyword search
+
+**Реализовано**:
+- ✅ Timeout protection для model loading
+- ✅ Optional dependencies (numpy, sentence-transformers)
+- ✅ Graceful fallback на keyword search
+- ✅ Re-enabled в StateManager с PAKnowledgeBase
+
+#### ✅ Emotion Detector - ВКЛЮЧЕН (2025-11-08)
+**Старый статус**: Disabled (зависал при загрузке transformers)
+**Новое решение**: ✅ Добавлен timeout 15s + fallback на keyword
+
+**Реализовано**:
+- ✅ Timeout protection для GoEmotions model
+- ✅ Optional dependencies (torch, transformers)
+- ✅ Graceful fallback на keyword-based detection
+- ✅ Re-enabled в StateManager
+
+---
+
+#### 1. Guardrails (`src/guardrails/`) - Остаётся отключенным
 **Статус**: Disabled
 **Причина**:
 ```
