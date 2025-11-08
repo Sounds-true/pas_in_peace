@@ -253,17 +253,24 @@ WHERE telegram_id = $5
 
 ---
 
-### Bug #2: История сообщений теряется при перезапуске
-**Проблема**: `message_history` хранится только в `UserState` (в памяти)
+### ✅ Bug #2: История сообщений теряется при перезапуске (ИСПРАВЛЕНО)
+**Проблема**: `message_history` хранилась только в `UserState` (в памяти)
 
 **Последствия**:
-- При перезапуске бота вся история диалога теряется
+- При перезапуске бота вся история диалога терялась
 - Невозможна долгосрочная терапия
-- Пользователь начинает "с нуля" каждый раз
+- Пользователь начинал "с нуля" каждый раз
 
-**Решение**: Создать таблицу `messages`
+**Решение**: ✅ Реализовано (2025-11-08)
+- ✅ Добавлено поле `content` в модель `Message` (models.py:126)
+- ✅ Создана миграция Alembic для добавления поля
+- ✅ Реализован метод `load_message_history()` в DatabaseManager (database.py:204-225)
+- ✅ Обновлен метод `save_message()` для сохранения содержимого (database.py:166)
+- ✅ Добавлен метод `save_message_to_db()` в StateManager (state_manager.py:377-427)
+- ✅ Сообщения сохраняются после каждого message (state_manager.py:462-467, 604-613)
+- ✅ История загружается при инициализации пользователя (state_manager.py:330-344)
 
-**Приоритет**: 🔥 Критический
+**Результат**: Бот теперь помнит всю историю разговоров даже после перезапуска!
 
 ---
 
@@ -436,9 +443,9 @@ VALUES ($1, $2, $3, 'active');
 
 #### Week 1: Critical Bugs
 - [ ] Fix `total_messages` counter in database
-- [ ] Create `messages` table and implement persistence
-- [ ] Load message history on bot restart
-- [ ] Test conversation memory across restarts
+- [x] Create `messages` table and implement persistence ✅ (2025-11-08)
+- [x] Load message history on bot restart ✅ (2025-11-08)
+- [ ] Test conversation memory across restarts (IN PROGRESS)
 
 #### Week 2: PII Protection
 - [ ] Implement regex-based PII detection (email, phone, names)
@@ -448,7 +455,7 @@ VALUES ($1, $2, $3, 'active');
 
 **Success Criteria**:
 - [ ] Message count updates correctly in DB
-- [ ] Conversation history persists after bot restart
+- [x] Conversation history persists after bot restart ✅ (2025-11-08)
 - [ ] PII is masked in all logs and database
 
 ---
@@ -592,7 +599,7 @@ See: `docs/API.md` (TODO)
 
 ### Critical
 1. **total_messages counter broken** - See Bug #1
-2. **Message history not persisted** - See Bug #2
+2. ~~**Message history not persisted**~~ - ✅ FIXED (2025-11-08)
 3. **PII not protected** - Module disabled
 
 ### High Priority

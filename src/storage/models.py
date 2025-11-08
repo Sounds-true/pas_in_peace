@@ -123,6 +123,7 @@ class Message(Base):
     # Message content (PII-scrubbed)
     role = Column(String(20), nullable=False)  # user/assistant/system
     content_hash = Column(String(64))  # SHA-256 hash for deduplication
+    content = Column(Text, nullable=False)  # Actual message content (TODO: encrypt in production)
 
     # Emotional analysis
     detected_emotions = Column(JSON, default=dict)
