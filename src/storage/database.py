@@ -163,6 +163,7 @@ class DatabaseManager:
         user_id: int,
         session_id: Optional[int],
         role: str,
+        content: str,  # NEW: actual message content
         content_hash: str,
         detected_emotions: Dict[str, float],
         emotional_intensity: float,
@@ -172,12 +173,13 @@ class DatabaseManager:
         guardrail_triggered: Optional[str] = None,
         conversation_state: Optional[str] = None,
     ) -> Message:
-        """Save message (PII-scrubbed)."""
+        """Save message with content."""
         async with self.session() as db_session:
             message = Message(
                 user_id=user_id,
                 session_id=session_id,
                 role=role,
+                content=content,  # NEW: save actual content
                 content_hash=content_hash,
                 detected_emotions=detected_emotions,
                 emotional_intensity=emotional_intensity,
@@ -198,6 +200,29 @@ class DatabaseManager:
                 user.total_messages += 1
 
             return message
+
+    async def load_message_history(
+        self,
+        telegram_id: str,
+        limit: int = 50
+    ) -> List[Message]:
+        """Load message history for a user from database."""
+        async with self.session() as db_session:
+            # Get user first
+            stmt = select(User).where(User.telegram_id == telegram_id)
+            result = await db_session.execute(stmt)
+            user = result.scalar_one_or_none()
+
+            if not user:
+                return []
+
+            # Get messages ordered by creation time (oldest first for proper history)
+            stmt = select(Message).where(
+                Message.user_id == user.id
+            ).order_by(Message.created_at.asc()).limit(limit)
+
+            result = await db_session.execute(stmt)
+            return list(result.scalars().all())
 
     # Goal operations
     async def create_goal(

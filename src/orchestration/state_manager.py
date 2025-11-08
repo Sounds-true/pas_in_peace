@@ -8,7 +8,7 @@ from pathlib import Path
 import asyncio
 
 from langgraph.graph import StateGraph, END
-from langchain.schema import BaseMessage, HumanMessage, SystemMessage
+from langchain.schema import BaseMessage, HumanMessage, SystemMessage, AIMessage
 
 from src.core.logger import get_logger
 from src.core.config import settings
@@ -326,8 +326,22 @@ class StateManager:
                     last_activity=db_user.last_activity,
                     context=db_user.context or {},
                 )
+
+                # Load message history from database
+                logger.debug("loading_message_history", user_id=user_id)
+                db_messages = await self.db.load_message_history(user_id, limit=50)
+                logger.debug("loaded_messages_from_db", user_id=user_id, count=len(db_messages))
+
+                for db_msg in db_messages:
+                    if db_msg.role == "user":
+                        user_state.message_history.append(HumanMessage(content=db_msg.content))
+                    elif db_msg.role == "assistant":
+                        user_state.message_history.append(AIMessage(content=db_msg.content))
+
                 self.user_states[user_id] = user_state
-                logger.info("user_loaded_from_db", user_id=user_id)
+                logger.info("user_loaded_from_db", user_id=user_id,
+                           messages_loaded=len(db_messages),
+                           history_length=len(user_state.message_history))
                 return
             except Exception as e:
                 logger.warning("user_load_from_db_failed", user_id=user_id, error=str(e))
@@ -374,6 +388,58 @@ class StateManager:
                         error=str(e))
             # Don't raise - continue even if save fails
 
+    async def save_message_to_db(
+        self,
+        user_id: str,
+        role: str,
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Save message to database for conversation history persistence."""
+        if not self.db:
+            return  # No database available, skip save
+
+        try:
+            # Get user from database to get internal user ID
+            db_user = await self.db.get_or_create_user(user_id)
+
+            # Calculate content hash for deduplication
+            import hashlib
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
+
+            # Extract metadata
+            metadata = metadata or {}
+            detected_emotions = metadata.get("detected_emotions", {})
+            emotional_intensity = metadata.get("emotional_intensity", 0.5)
+            distress_level = metadata.get("distress_level", "moderate")
+            crisis_detected = metadata.get("crisis_detected", False)
+            crisis_confidence = metadata.get("crisis_confidence", 0.0)
+            guardrail_triggered = metadata.get("guardrail_triggered")
+            conversation_state = metadata.get("conversation_state")
+
+            # Save message
+            await self.db.save_message(
+                user_id=db_user.id,
+                session_id=None,  # Session tracking not implemented yet
+                role=role,
+                content=content,
+                content_hash=content_hash,
+                detected_emotions=detected_emotions,
+                emotional_intensity=emotional_intensity,
+                distress_level=distress_level,
+                crisis_detected=crisis_detected,
+                crisis_confidence=crisis_confidence,
+                guardrail_triggered=guardrail_triggered,
+                conversation_state=conversation_state,
+            )
+            logger.debug("message_saved_to_db", user_id=user_id, role=role)
+
+        except Exception as e:
+            logger.error("message_save_to_db_failed",
+                        user_id=user_id,
+                        error=str(e))
+            # Don't raise - continue even if save fails
+
     async def transition_to_crisis(self, user_id: str) -> None:
         """Immediately transition user to crisis state."""
         user_state = self.user_states.get(user_id)
@@ -406,6 +472,13 @@ class StateManager:
         user_state.last_activity = datetime.now()
         user_state.messages_count += 1
         user_state.message_history.append(HumanMessage(content=message))
+
+        # Save user message to database
+        await self.save_message_to_db(
+            user_id=user_id,
+            role="user",
+            content=message
+        )
 
         # Check guardrails (if enabled)
         if self.guardrails:
@@ -541,6 +614,17 @@ class StateManager:
 
             # Update message history
             user_state.message_history.append(SystemMessage(content=safe_response))
+
+            # Save assistant message to database
+            await self.save_message_to_db(
+                user_id=user_id,
+                role="assistant",
+                content=safe_response,
+                metadata={
+                    "technique_used": technique_used if user_state.completed_techniques else None,
+                    "conversation_state": user_state.current_state.value,
+                }
+            )
 
             # Record metrics for successful message processing
             response_time = time.time() - start_time
