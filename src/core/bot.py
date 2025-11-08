@@ -155,7 +155,7 @@ class PASBot:
             )
 
     async def goals_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /goals command - view goals."""
+        """Handle /goals command - view and manage goals."""
         user_id = str(update.effective_user.id)
 
         log_user_interaction(
@@ -165,9 +165,61 @@ class PASBot:
             command="goals"
         )
 
-        # Process through state manager with "цель" keyword
-        response = await self.state_manager.process_message(user_id, "покажи мои цели")
-        await update.message.reply_text(response)
+        # Get user from state manager to access database
+        user_state = await self.state_manager.get_or_create_user_state(user_id)
+
+        if not self.state_manager.db:
+            await update.message.reply_text("Извините, база данных недоступна.")
+            return
+
+        try:
+            # Retrieve active goals for this user
+            goals = await self.state_manager.db.get_active_goals(user_id=user_state.user_id)
+
+            if not goals:
+                message = (
+                    "🎯 **У вас пока нет активных целей**\n\n"
+                    "Постановка целей помогает:\n"
+                    "• Видеть прогресс\n"
+                    "• Чувствовать контроль над ситуацией\n"
+                    "• Двигаться к конкретному результату\n\n"
+                    "Хотите поставить цель? Напишите: **\"хочу поставить цель\"**"
+                )
+            else:
+                # Build message with goals list
+                message = f"🎯 **Ваши цели** ({len(goals)}):\n\n"
+
+                for idx, goal in enumerate(goals, 1):
+                    progress = goal.progress_percentage or 0.0
+                    progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
+
+                    message += f"**{idx}. {goal.title}**\n"
+                    message += f"   {progress_bar} {int(progress)}%\n"
+
+                    if goal.description:
+                        desc_short = goal.description[:60] + "..." if len(goal.description) > 60 else goal.description
+                        message += f"   📝 {desc_short}\n"
+
+                    if goal.time_bound:
+                        message += f"   ⏱️ Срок: {goal.time_bound}\n"
+
+                    if goal.milestones:
+                        completed = len(goal.completed_milestones) if goal.completed_milestones else 0
+                        total = len(goal.milestones)
+                        message += f"   ✓ Шагов выполнено: {completed}/{total}\n"
+
+                    message += "\n"
+
+                message += "\nЧтобы обновить прогресс, напишите: **\"обновить цель [номер]\"**\n"
+                message += "Чтобы поставить новую цель: **\"хочу поставить цель\"**"
+
+            await update.message.reply_text(message)
+
+        except Exception as e:
+            logger.error("goals_list_failed", error=str(e), user_id=user_id)
+            await update.message.reply_text(
+                "Произошла ошибка при загрузке целей. Попробуйте позже."
+            )
 
     async def crisis_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /crisis command - immediate crisis resources."""

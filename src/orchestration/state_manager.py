@@ -22,7 +22,8 @@ from src.techniques import (
     GroundingTechnique,
     ValidationTechnique,
     ActiveListening,
-    LetterWritingAssistant
+    LetterWritingAssistant,
+    GoalTrackingAssistant
 )
 from src.techniques.orchestrator import TechniqueOrchestrator
 from src.rag import KnowledgeRetriever, PAKnowledgeBase
@@ -99,7 +100,8 @@ class StateManager:
             "grounding": GroundingTechnique(),
             "validation": ValidationTechnique(),
             "active_listening": ActiveListening(),
-            "letter_writing": LetterWritingAssistant()
+            "letter_writing": LetterWritingAssistant(),
+            "goal_tracking": GoalTrackingAssistant()
         }
 
         # Initialize orchestrator and other lightweight components
@@ -664,6 +666,11 @@ class StateManager:
             # Save user state to database
             await self.save_user_state(user_state)
 
+            # Check if we should suggest goal setting (after 3-5 messages)
+            goal_suggestion = await self._check_goal_setting_trigger(user_id, user_state)
+            if goal_suggestion:
+                safe_response += f"\n\n{goal_suggestion}"
+
             return safe_response
 
         except Exception as e:
@@ -1046,6 +1053,58 @@ class StateManager:
         except Exception as e:
             logger.error("knowledge_augmentation_failed", error=str(e))
             return base_response
+
+    async def _check_goal_setting_trigger(
+        self,
+        user_id: str,
+        user_state: UserState
+    ) -> Optional[str]:
+        """
+        Check if we should suggest goal setting to the user.
+
+        Triggers after 3-5 messages if user has no active goals.
+
+        Returns:
+            Goal suggestion text or None
+        """
+        # Only trigger between messages 3-5
+        if user_state.messages_count < 3 or user_state.messages_count > 5:
+            return None
+
+        # Check if already suggested in this session
+        if user_state.context.get("goal_suggested"):
+            return None
+
+        # Check if user already has active goals
+        if self.db:
+            try:
+                active_goals = await self.db.get_active_goals(user_id=user_state.user_id)
+                if active_goals:
+                    return None  # User already has goals
+            except Exception as e:
+                logger.warning("goal_check_failed", error=str(e))
+                # Continue even if check fails
+
+        # Mark as suggested
+        user_state.context["goal_suggested"] = True
+
+        # Return suggestion
+        suggestion = """---
+
+🎯 **Давайте поставим цель**
+
+Я замечу, что вы уже несколько раз обращались за поддержкой. Хотите ли вы поставить конкретную цель, над которой мы будем работать вместе?
+
+Это поможет вам:
+• Видеть прогресс
+• Чувствовать контроль
+• Двигаться к результату
+
+Чтобы начать, просто напишите: **"хочу поставить цель"** или используйте /goals"""
+
+        logger.info("goal_setting_triggered", user_id=user_id, message_count=user_state.messages_count)
+
+        return suggestion
 
     async def process_voice_message(self, user_id: str, audio_path: Path) -> str:
         """
