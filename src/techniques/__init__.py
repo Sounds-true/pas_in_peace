@@ -5,6 +5,7 @@ from src.techniques.cbt import CBTReframing
 from src.techniques.grounding import GroundingTechnique
 from src.techniques.validation import ValidationTechnique
 from src.techniques.active_listening import ActiveListening
+from src.techniques.letter_writing import LetterWritingAssistant, LetterStage, LetterContext
 
 __all__ = [
     "Technique",
@@ -12,4 +13,7 @@ __all__ = [
     "GroundingTechnique",
     "ValidationTechnique",
     "ActiveListening",
+    "LetterWritingAssistant",
+    "LetterStage",
+    "LetterContext",
 ]
