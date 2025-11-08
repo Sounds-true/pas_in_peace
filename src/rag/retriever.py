@@ -4,7 +4,12 @@ import asyncio
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
-import numpy as np
+
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
 
 from src.core.logger import get_logger
 from src.core.config import settings
@@ -18,7 +23,7 @@ class Document:
     """Document with content and metadata."""
     content: str
     metadata: Dict[str, Any]
-    embedding: Optional[np.ndarray] = None
+    embedding: Optional[Any] = None  # np.ndarray when available
 
     def __post_init__(self):
         """Calculate document hash for caching."""
@@ -54,20 +59,33 @@ class KnowledgeRetriever:
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.initialized = False
 
-    async def initialize(self) -> None:
-        """Load embedding model."""
+    async def initialize(self, timeout: float = 30.0) -> None:
+        """Load embedding model with timeout protection."""
         try:
             from sentence_transformers import SentenceTransformer
 
+            def _load_model():
+                """Load SentenceTransformer model (sync)."""
+                return SentenceTransformer(self.embedding_model_name)
+
+            # Load model with timeout
             loop = asyncio.get_event_loop()
-            self.model = await loop.run_in_executor(
-                self.executor,
-                lambda: SentenceTransformer(self.embedding_model_name)
+            self.model = await asyncio.wait_for(
+                loop.run_in_executor(self.executor, _load_model),
+                timeout=timeout
             )
 
             self.initialized = True
             logger.info("knowledge_retriever_initialized", model=self.embedding_model_name)
 
+        except asyncio.TimeoutError:
+            logger.warning("knowledge_retriever_init_timeout",
+                          message=f"Model loading timed out after {timeout}s, using keyword fallback")
+            self.initialized = False
+        except ImportError:
+            logger.warning("sentence_transformers_not_installed",
+                          message="Install sentence-transformers for semantic search")
+            self.initialized = False
         except Exception as e:
             logger.warning("knowledge_retriever_init_failed", error=str(e))
             # Continue without embeddings - will use keyword fallback
@@ -145,6 +163,10 @@ class KnowledgeRetriever:
         threshold: float
     ) -> List[RetrievalResult]:
         """Semantic search using embeddings."""
+        if not NUMPY_AVAILABLE:
+            logger.warning("numpy_not_available", message="Falling back to keyword search")
+            return await self._keyword_search(query, top_k)
+
         # Generate query embedding
         loop = asyncio.get_event_loop()
         query_embedding = await loop.run_in_executor(

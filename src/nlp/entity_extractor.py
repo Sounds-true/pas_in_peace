@@ -75,7 +75,7 @@ class EntityExtractor:
         ]
 
     async def initialize(self) -> bool:
-        """Initialize Natasha models."""
+        """Initialize Natasha models with timeout protection."""
         if self.initialized:
             return True
 
@@ -86,15 +86,34 @@ class EntityExtractor:
             return False
 
         try:
-            self.segmenter = Segmenter()
-            self.embedding = NewsEmbedding()
-            self.morph_tagger = NewsMorphTagger(self.embedding)
-            self.ner_tagger = NewsNERTagger(self.embedding)
+            # Add timeout to prevent hanging
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor
+
+            def _init_natasha():
+                """Initialize Natasha components (sync)."""
+                self.segmenter = Segmenter()
+                self.embedding = NewsEmbedding()
+                self.morph_tagger = NewsMorphTagger(self.embedding)
+                self.ner_tagger = NewsNERTagger(self.embedding)
+
+            # Run in executor with 10 second timeout
+            loop = asyncio.get_event_loop()
+            executor = ThreadPoolExecutor(max_workers=1)
+            await asyncio.wait_for(
+                loop.run_in_executor(executor, _init_natasha),
+                timeout=10.0
+            )
 
             self.initialized = True
             logger.info("entity_extractor_initialized", backend="natasha")
             return True
 
+        except asyncio.TimeoutError:
+            logger.warning("entity_extractor_init_timeout",
+                          message="Natasha initialization timed out, using pattern fallback")
+            self.initialized = True  # Mark as initialized to use fallback
+            return False
         except Exception as e:
             logger.error("entity_extractor_init_failed", error=str(e))
             self.initialized = True  # Mark as initialized to use fallback

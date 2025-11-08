@@ -88,11 +88,11 @@ class StateManager:
 
         # Will be initialized in async initialize() method
         self.guardrails = None
-        self.emotion_detector = None
-        self.entity_extractor = None
-        self.intent_classifier = None
-        self.speech_handler = None
-        self.knowledge_retriever = None
+        self.emotion_detector = EmotionDetector()
+        self.entity_extractor = EntityExtractor()
+        self.intent_classifier = None  # Still disabled - not critical for MVP
+        self.speech_handler = None  # Still disabled - not critical for MVP
+        self.knowledge_retriever = KnowledgeRetriever()
 
         # Initialize therapeutic techniques (lightweight, no ML)
         self.techniques = {
@@ -136,41 +136,41 @@ class StateManager:
             logger.warning("guardrails_disabled", reason="Temporarily disabled due to initialization issues")
             self.guardrails = None
 
-            # Initialize emotion detector (optional for MVP)
-            # TEMPORARILY DISABLED - Emotion Detector causes hanging during model loading
-            # try:
-            #     await self.emotion_detector.initialize()
-            #     logger.info("emotion_detector_enabled")
-            # except Exception as e:
-            #     logger.warning("emotion_detector_disabled", reason=str(e))
-            #     # Continue without emotion detector - will use keyword fallback
-            logger.warning("emotion_detector_disabled", reason="Temporarily disabled due to initialization hang")
-            self.emotion_detector = None
+            # Initialize emotion detector (optional for MVP, with timeout protection)
+            try:
+                success = await self.emotion_detector.initialize(timeout=15.0)
+                if success:
+                    logger.info("emotion_detector_enabled")
+                else:
+                    logger.warning("emotion_detector_disabled", reason="Initialization failed, will use keyword fallback")
+                    self.emotion_detector = None
+            except Exception as e:
+                logger.warning("emotion_detector_disabled", reason=str(e))
+                self.emotion_detector = None
 
-            # Initialize RAG retriever and load knowledge base
-            # TEMPORARILY DISABLED - RAG initialization causes hanging during model loading
-            # try:
-            #     await self.knowledge_retriever.initialize()
-            #     # Load knowledge base documents
-            #     documents = PAKnowledgeBase.get_all_documents()
-            #     await self.knowledge_retriever.add_documents(documents)
-            #     logger.info("knowledge_retriever_enabled", doc_count=len(documents))
-            # except Exception as e:
-            #     logger.warning("knowledge_retriever_disabled", reason=str(e))
-            #     # Continue without RAG - will use only predefined responses
-            logger.warning("knowledge_retriever_disabled", reason="Temporarily disabled due to initialization hang")
-            self.knowledge_retriever = None
+            # Initialize RAG retriever and load knowledge base (with timeout protection)
+            try:
+                await self.knowledge_retriever.initialize(timeout=20.0)
+                # Load knowledge base documents
+                documents = PAKnowledgeBase.get_all_documents()
+                await self.knowledge_retriever.add_documents(documents)
+                logger.info("knowledge_retriever_enabled", doc_count=len(documents))
+            except Exception as e:
+                logger.warning("knowledge_retriever_disabled", reason=str(e))
+                # Continue without RAG - will use keyword fallback
+                self.knowledge_retriever = None
 
-            # Initialize entity extractor (optional)
-            # TEMPORARILY DISABLED - Hangs during initialization like other ML components
-            # try:
-            #     await self.entity_extractor.initialize()
-            #     logger.info("entity_extractor_enabled")
-            # except Exception as e:
-            #     logger.warning("entity_extractor_disabled", reason=str(e))
-            #     # Continue without entity extraction - will work without context enrichment
-            logger.warning("entity_extractor_disabled", reason="Temporarily disabled due to initialization hang")
-            self.entity_extractor = None
+            # Initialize entity extractor (optional, with timeout protection)
+            try:
+                success = await self.entity_extractor.initialize()
+                if success:
+                    logger.info("entity_extractor_enabled", backend="natasha")
+                else:
+                    logger.info("entity_extractor_enabled", backend="regex_fallback")
+                    # Entity extractor will use pattern-based fallback
+            except Exception as e:
+                logger.warning("entity_extractor_error", reason=str(e))
+                # Entity extractor will use pattern-based fallback
 
             # Initialize intent classifier (optional)
             # TEMPORARILY DISABLED - Hangs during initialization like other ML components
