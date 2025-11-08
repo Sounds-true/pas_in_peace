@@ -219,17 +219,17 @@
 
 ## 🔧 Критические Баги
 
-### Bug #1: total_messages не обновляется в БД
-**Файл**: `src/orchestration/state_manager.py`
+### ✅ Bug #1: total_messages не обновляется в БД (ИСПРАВЛЕНО)
+**Файл**: `src/orchestration/state_manager.py`, `src/storage/database.py`
 **Проблема**:
 ```python
-# Строка 407: увеличивается в памяти
+# Строка 459: увеличивается в памяти
 user_state.messages_count += 1
 
 # Строка 558: save_user_state() вызывается
 await self.save_user_state(user_state)
 
-# НО: messages_count НЕ включён в UPDATE запрос
+# НО: messages_count НЕ включался в UPDATE запрос
 ```
 
 **Лог**:
@@ -238,18 +238,12 @@ SELECT total_messages FROM users WHERE telegram_id = '430658962';
 -- Результат: 0 (всегда)
 ```
 
-**Решение**:
-```python
-# В src/db/repositories.py или где выполняется UPDATE
-UPDATE users SET
-    total_messages = $1,  # ДОБАВИТЬ
-    emotional_score = $2,
-    crisis_level = $3,
-    last_activity = $4
-WHERE telegram_id = $5
-```
+**Решение**: ✅ Реализовано (2025-11-08)
+- ✅ Добавлен параметр `total_messages` в `update_user_state()` (database.py:99)
+- ✅ Обновлен `save_user_state()` для передачи `messages_count` (state_manager.py:383)
+- ✅ Убран дублирующий инкремент из `save_message()` (database.py:198-200)
 
-**Приоритет**: 🔥 Критический
+**Результат**: Счетчик сообщений теперь корректно обновляется в БД!
 
 ---
 
@@ -442,10 +436,10 @@ VALUES ($1, $2, $3, 'active');
 ### Phase 1: Stability & Core Fixes (1-2 weeks) 🔥
 
 #### Week 1: Critical Bugs
-- [ ] Fix `total_messages` counter in database
+- [x] Fix `total_messages` counter in database ✅ (2025-11-08)
 - [x] Create `messages` table and implement persistence ✅ (2025-11-08)
 - [x] Load message history on bot restart ✅ (2025-11-08)
-- [ ] Test conversation memory across restarts (IN PROGRESS)
+- [ ] Test conversation memory across restarts (READY FOR TESTING)
 
 #### Week 2: PII Protection
 - [ ] Implement regex-based PII detection (email, phone, names)
@@ -454,7 +448,7 @@ VALUES ($1, $2, $3, 'active');
 - [ ] Test with real PII examples
 
 **Success Criteria**:
-- [ ] Message count updates correctly in DB
+- [x] Message count updates correctly in DB ✅ (2025-11-08)
 - [x] Conversation history persists after bot restart ✅ (2025-11-08)
 - [ ] PII is masked in all logs and database
 
@@ -598,7 +592,7 @@ See: `docs/API.md` (TODO)
 ## 🐛 Known Issues
 
 ### Critical
-1. **total_messages counter broken** - See Bug #1
+1. ~~**total_messages counter broken**~~ - ✅ FIXED (2025-11-08)
 2. ~~**Message history not persisted**~~ - ✅ FIXED (2025-11-08)
 3. **PII not protected** - Module disabled
 

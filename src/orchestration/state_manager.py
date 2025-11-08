@@ -373,15 +373,17 @@ class StateManager:
             return  # No database available, skip save
 
         try:
-            # Update user in database
+            # Update user in database (includes Bug #1 fix: total_messages)
             await self.db.update_user_state(
                 telegram_id=user_state.user_id,
                 state=user_state.current_state.value,
                 emotional_score=user_state.emotional_score,
                 crisis_level=user_state.crisis_level,
                 therapy_phase=user_state.therapy_phase.value,
+                total_messages=user_state.messages_count,  # NEW: Fix Bug #1
             )
-            logger.debug("user_state_saved", user_id=user_state.user_id)
+            logger.debug("user_state_saved", user_id=user_state.user_id,
+                        total_messages=user_state.messages_count)
         except Exception as e:
             logger.error("user_state_save_failed",
                         user_id=user_state.user_id,

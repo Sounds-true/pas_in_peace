@@ -96,6 +96,7 @@ class DatabaseManager:
         emotional_score: Optional[float] = None,
         crisis_level: Optional[float] = None,
         therapy_phase: Optional[str] = None,
+        total_messages: Optional[int] = None,  # NEW: Fix for Bug #1
     ) -> None:
         """Update user state."""
         async with self.session() as session:
@@ -114,6 +115,8 @@ class DatabaseManager:
                 user.crisis_level = crisis_level
             if therapy_phase:
                 user.therapy_phase = therapy_phase
+            if total_messages is not None:  # NEW: Update total_messages
+                user.total_messages = total_messages
 
             user.last_activity = datetime.utcnow()
 
@@ -192,12 +195,9 @@ class DatabaseManager:
             db_session.add(message)
             await db_session.flush()
 
-            # Update user message count
-            stmt = select(User).where(User.id == user_id)
-            result = await db_session.execute(stmt)
-            user = result.scalar_one_or_none()
-            if user:
-                user.total_messages += 1
+            # NOTE: total_messages counter is managed by StateManager
+            # It increments user_state.messages_count and saves via save_user_state()
+            # This prevents double-counting (user + assistant messages)
 
             return message
 
