@@ -29,6 +29,7 @@ from src.monitoring import MetricsCollector
 from src.legal import LegalToolsHandler
 from src.storage.database import DatabaseManager
 from src.storage.models import ConversationStateEnum, TherapyPhaseEnum
+from src.nlp.simple_pii_protector import SimplePIIProtector
 
 
 logger = get_logger(__name__)
@@ -104,6 +105,7 @@ class StateManager:
         self.metrics_collector = MetricsCollector()
         self.legal_tools = LegalToolsHandler()
         self.db = DatabaseManager()
+        self.pii_protector = SimplePIIProtector()  # NEW: Simple PII protection
 
         self.initialized = False
 
@@ -405,9 +407,25 @@ class StateManager:
             # Get user from database to get internal user ID
             db_user = await self.db.get_or_create_user(user_id)
 
+            # PII Protection: Anonymize content before saving
+            # Detect PII and log statistics
+            pii_stats = self.pii_protector.get_statistics(content)
+            if pii_stats:
+                logger.warning("pii_detected_in_message",
+                             user_id=user_id,
+                             role=role,
+                             pii_types=pii_stats)
+
+            # Anonymize sensitive content (keep names for therapy context)
+            anonymized_content = self.pii_protector.anonymize(
+                content,
+                entity_types=["EMAIL", "PHONE", "CREDIT_CARD", "PASSPORT", "SNILS"]
+                # Note: PERSON_NAME not anonymized - needed for therapy context
+            )
+
             # Calculate content hash for deduplication
             import hashlib
-            content_hash = hashlib.sha256(content.encode()).hexdigest()
+            content_hash = hashlib.sha256(anonymized_content.encode()).hexdigest()
 
             # Extract metadata
             metadata = metadata or {}
@@ -419,12 +437,12 @@ class StateManager:
             guardrail_triggered = metadata.get("guardrail_triggered")
             conversation_state = metadata.get("conversation_state")
 
-            # Save message
+            # Save message with PII protection
             await self.db.save_message(
                 user_id=db_user.id,
                 session_id=None,  # Session tracking not implemented yet
                 role=role,
-                content=content,
+                content=anonymized_content,  # Save anonymized version
                 content_hash=content_hash,
                 detected_emotions=detected_emotions,
                 emotional_intensity=emotional_intensity,
@@ -434,7 +452,8 @@ class StateManager:
                 guardrail_triggered=guardrail_triggered,
                 conversation_state=conversation_state,
             )
-            logger.debug("message_saved_to_db", user_id=user_id, role=role)
+            logger.debug("message_saved_to_db", user_id=user_id, role=role,
+                        pii_anonymized=bool(pii_stats))
 
         except Exception as e:
             logger.error("message_save_to_db_failed",
