@@ -284,7 +284,7 @@ What does it answer?"""
 
 Часто менеджер боится, что если он перестанет контролировать, всплывет невыносимая боль.
 
-Можете ли вы поблагодарить эту часть за ее работу и спросить: "Что тебе нужно от меня?""""
+Можете ли вы поблагодарить эту часть за ее работу и спросить: "Что тебе нужно от меня?\""""
         else:
             return f"""I hear a part of you that's trying to control and manage everything.
 
@@ -296,7 +296,7 @@ Try asking it with curiosity:
 
 Often the manager fears that if it stops controlling, unbearable pain will surface.
 
-Can you thank this part for its work and ask: "What do you need from me?""""
+Can you thank this part for its work and ask: "What do you need from me?\""""
 
     def _dialogue_exile(self, part: IdentifiedPart, language: str) -> str:
         """Dialogue with exile (wounded part)."""

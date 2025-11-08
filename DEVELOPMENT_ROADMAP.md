@@ -1,0 +1,686 @@
+# PAS Bot - Development Roadmap & Technical Specification
+
+## 📋 Текущее Состояние (v0.2.0 - Working MVP)
+
+### ✅ Что Работает
+
+#### Core Functionality
+- [x] Telegram Bot с polling mode
+- [x] Обработка текстовых сообщений
+- [x] Команды: `/start`, `/help`, `/letter`, `/goals`, `/crisis`, `/privacy`
+- [x] LangGraph State Machine для управления диалогом
+- [x] PostgreSQL база данных для хранения профилей пользователей
+- [x] Redis (опционально, не критично)
+
+#### AI & NLP (Работающие Модули)
+- [x] **OpenAI GPT-4 Integration** - генерация эмпатичных ответов
+- [x] **Active Listening Technique** - основная терапевтическая техника
+- [x] **Conversation Memory** - передача последних 10 сообщений в OpenAI
+- [x] **Stage-Based Progression** - этапы диалога (1-2: listening, 3-5: understanding, 6+: action)
+- [x] **Supervisor Agent** - контроль качества ответов (empathy, safety, boundaries)
+- [x] **Keyword-based Emotion Detection** - базовая детекция эмоций и тем
+- [x] **Keyword-based Crisis Detection** - обнаружение суицидальных мыслей и угроз насилия
+
+#### Therapeutic Techniques (Реализованы, но не все используются)
+- [x] Active Listening (используется всегда)
+- [x] CBT Reframing
+- [x] Grounding Techniques
+- [x] IFS Parts Work
+- [x] Validation
+- [x] Letter Writing Prompts (базовая версия)
+
+---
+
+### ❌ Что Отключено (Причины и Решения)
+
+#### 1. Guardrails (`src/guardrails/`)
+**Статус**: Disabled
+**Причина**:
+```
+{"reason": "Temporarily disabled due to initialization issues",
+ "event": "guardrails_disabled"}
+```
+**Проблема**: Модель guardrails зависает при загрузке
+**Лог Ошибки**: См. `logs/guardrails_init_error.log`
+
+**Технические Детали**:
+- Используется библиотека для фильтрации нежелательного контента
+- Timeout при инициализации > 30 секунд
+- Возможно, проблема с загрузкой ML модели или сетевым доступом
+
+**Решение**:
+1. Проверить версию библиотеки guardrails
+2. Использовать lazy loading вместо eager initialization
+3. Альтернатива: Простая keyword-based фильтрация
+4. Добавить timeout и fallback на базовую версию
+
+**Приоритет**: 🟡 Средний (сейчас SupervisorAgent частично покрывает эту функциональность)
+
+---
+
+#### 2. Emotion Detector ML-based (`src/nlp/emotion_detector.py`)
+**Статус**: Disabled
+**Причина**:
+```
+{"reason": "Temporarily disabled due to initialization hang",
+ "event": "emotion_detector_disabled"}
+```
+**Проблема**: Зависание при загрузке ML модели
+**Лог Ошибки**: Процесс зависает на `EmotionDetector.__init__()`
+
+**Технические Детали**:
+- Используется transformers модель (вероятно BERT-based)
+- Загрузка модели из HuggingFace зависает
+- Возможно, проблема с кешем моделей или сетью
+
+**Текущий Fallback**: Keyword-based детекция работает хорошо
+
+**Решение**:
+1. Использовать pre-downloaded модель (не загружать с HF каждый раз)
+2. Добавить timeout на инициализацию
+3. Lazy loading: загружать модель при первом вызове, а не при старте
+4. Альтернатива: API-based решение (OpenAI Moderation API)
+
+**Приоритет**: 🟢 Низкий (keyword-based детекция достаточна для MVP)
+
+---
+
+#### 3. Knowledge Retriever (RAG) (`src/knowledge/retriever.py`)
+**Статус**: Disabled
+**Причина**:
+```
+{"reason": "Temporarily disabled due to initialization hang",
+ "event": "knowledge_retriever_disabled"}
+```
+**Проблема**: Зависание при инициализации векторной БД или embeddings
+
+**Технические Детали**:
+- RAG (Retrieval-Augmented Generation) для ответов на основе базы знаний
+- Используется векторная БД (ChromaDB/Pinecone/FAISS?)
+- Зависает при создании embeddings или подключении к БД
+
+**Последствия**: Бот не использует базу знаний о Parental Alienation
+
+**Решение**:
+1. Проверить конфигурацию векторной БД
+2. Pre-compute embeddings для базы знаний
+3. Использовать локальную FAISS вместо внешнего сервиса
+4. Lazy loading: инициализировать при первом запросе
+
+**Приоритет**: 🟡 Средний (повысит качество специализированных ответов)
+
+---
+
+#### 4. Entity Extractor (NER) (`src/nlp/entity_extractor.py`)
+**Статус**: Disabled
+**Причина**:
+```
+{"reason": "Temporarily disabled due to initialization hang",
+ "event": "entity_extractor_disabled"}
+```
+**Проблема**: Зависание при загрузке spaCy модели
+
+**Технические Детали**:
+- Используется spaCy для извлечения имён, дат, мест
+- Модель `ru_core_news_lg` или `en_core_web_lg`
+- Зависает при `spacy.load()`
+
+**Последствия**: Не извлекаются автоматически имена детей, даты событий
+
+**Решение**:
+1. Проверить установку spaCy: `python -m spacy validate`
+2. Скачать модель заранее: `python -m spacy download ru_core_news_lg`
+3. Использовать легковесную модель: `ru_core_news_sm`
+4. Lazy loading + timeout
+5. Альтернатива: Regex-based извлечение для базовых случаев
+
+**Приоритет**: 🟡 Средний (улучшит персонализацию)
+
+---
+
+#### 5. Intent Classifier (`src/nlp/intent_classifier.py`)
+**Статус**: Disabled
+**Причина**:
+```
+{"reason": "Temporarily disabled due to initialization hang",
+ "event": "intent_classifier_disabled"}
+```
+**Проблема**: Зависание при загрузке ML модели для классификации намерений
+
+**Технические Детали**:
+- Классификация намерений: LETTER_WRITING, GOAL_SETTING, CRISIS, etc.
+- Используется BERT или fine-tuned модель
+- Зависает при загрузке весов
+
+**Текущий Fallback**: Keyword matching в state_manager.py
+
+**Решение**:
+1. Использовать легковесную модель (DistilBERT)
+2. Pre-download модели
+3. API-based классификация (OpenAI Function Calling)
+4. Keyword-based подход достаточен для MVP
+
+**Приоритет**: 🟢 Низкий (keyword matching работает)
+
+---
+
+#### 6. Speech Handler (`src/nlp/speech_handler.py`)
+**Статус**: Disabled
+**Причина**:
+```
+{"reason": "Temporarily disabled",
+ "event": "speech_handler_disabled"}
+```
+**Проблема**: Не критична для MVP, отключен превентивно
+
+**Технические Детали**:
+- Распознавание голосовых сообщений
+- Используется Whisper API или аналог
+- Требует ffmpeg (не установлен)
+
+**Последствия**: Голосовые сообщения не обрабатываются
+
+**Решение**:
+1. Установить ffmpeg: `brew install ffmpeg`
+2. Интегрировать OpenAI Whisper API
+3. Добавить обработку audio файлов от Telegram
+
+**Приоритет**: 🟢 Низкий (текстовые сообщения приоритетны)
+
+---
+
+#### 7. PII Protector (`src/nlp/pii_protector.py`)
+**Статус**: Disabled
+**Причина**:
+```
+{"reason": "Temporarily disabled due to model loading hang",
+ "event": "pii_protector_disabled"}
+```
+**Проблема**: Зависание при загрузке Presidio модели
+
+**Технические Детали**:
+- Используется Microsoft Presidio для обнаружения PII
+- Требует spaCy модель + Presidio analyzer
+- Зависает при инициализации NER recognizer
+
+**Последствия**: Персональные данные не удаляются автоматически из логов
+
+**Решение**:
+1. Использовать простую regex-based детекцию:
+   - Email: `\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`
+   - Телефон: `\+?\d[\d\s()-]{7,}\d`
+   - ФИО: Словарь русских имён + фамилий
+2. Lazy loading Presidio
+3. Альтернатива: Post-processing в БД перед сохранением
+
+**Приоритет**: 🔥 Высокий (безопасность данных критична)
+
+---
+
+## 🔧 Критические Баги
+
+### Bug #1: total_messages не обновляется в БД
+**Файл**: `src/orchestration/state_manager.py`
+**Проблема**:
+```python
+# Строка 407: увеличивается в памяти
+user_state.messages_count += 1
+
+# Строка 558: save_user_state() вызывается
+await self.save_user_state(user_state)
+
+# НО: messages_count НЕ включён в UPDATE запрос
+```
+
+**Лог**:
+```sql
+SELECT total_messages FROM users WHERE telegram_id = '430658962';
+-- Результат: 0 (всегда)
+```
+
+**Решение**:
+```python
+# В src/db/repositories.py или где выполняется UPDATE
+UPDATE users SET
+    total_messages = $1,  # ДОБАВИТЬ
+    emotional_score = $2,
+    crisis_level = $3,
+    last_activity = $4
+WHERE telegram_id = $5
+```
+
+**Приоритет**: 🔥 Критический
+
+---
+
+### Bug #2: История сообщений теряется при перезапуске
+**Проблема**: `message_history` хранится только в `UserState` (в памяти)
+
+**Последствия**:
+- При перезапуске бота вся история диалога теряется
+- Невозможна долгосрочная терапия
+- Пользователь начинает "с нуля" каждый раз
+
+**Решение**: Создать таблицу `messages`
+
+**Приоритет**: 🔥 Критический
+
+---
+
+## 📐 Архитектурные Улучшения
+
+### 1. Persistence Layer для Истории Диалога
+
+**Создать таблицу**:
+```sql
+CREATE TABLE messages (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    role VARCHAR(20) NOT NULL,  -- 'human' или 'ai'
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+
+    -- Метаданные для аналитики
+    technique_used VARCHAR(50),
+    emotion VARCHAR(50),
+    distress_level VARCHAR(20),
+    stage VARCHAR(50),  -- 'listening', 'understanding', 'action'
+
+    -- Дополнительно
+    metadata JSONB,
+
+    -- Индексы
+    CONSTRAINT messages_role_check CHECK (role IN ('human', 'ai'))
+);
+
+CREATE INDEX idx_messages_user_created ON messages(user_id, created_at DESC);
+CREATE INDEX idx_messages_user_role ON messages(user_id, role);
+```
+
+**Изменить `state_manager.py`**:
+```python
+# После строки 408 (добавление в message_history)
+user_state.message_history.append(HumanMessage(content=message))
+
+# ДОБАВИТЬ сохранение в БД
+await self.save_message(
+    user_id=user_id,
+    role="human",
+    content=message,
+    metadata={
+        "distress_level": context.get("distress_level"),
+        "emotion": context.get("primary_emotion")
+    }
+)
+
+# После строки 543 (добавление AI response)
+user_state.message_history.append(SystemMessage(content=safe_response))
+
+# ДОБАВИТЬ сохранение в БД
+await self.save_message(
+    user_id=user_id,
+    role="ai",
+    content=safe_response,
+    technique_used=technique_used,
+    stage=stage,
+    metadata=result.metadata
+)
+```
+
+**Загрузка истории при старте**:
+```python
+async def initialize_user(self, user_id: str):
+    # ... существующий код ...
+
+    # ДОБАВИТЬ загрузку истории из БД
+    messages = await self.load_message_history(user_id, limit=10)
+    for msg in messages:
+        if msg.role == 'human':
+            user_state.message_history.append(HumanMessage(content=msg.content))
+        elif msg.role == 'ai':
+            user_state.message_history.append(AIMessage(content=msg.content))
+```
+
+**Приоритет**: 🔥 Критический
+
+---
+
+### 2. Улучшить Letter Writing Flow
+
+**Текущее состояние**:
+```python
+# /letter просто спрашивает вопрос
+response = "Кому вы хотите написать, и какую главную мысль хотите передать?"
+```
+
+**Улучшенный Flow**:
+
+1. **Создать отдельную технику** `LetterWritingAssistant`:
+
+```python
+class LetterWritingAssistant(Technique):
+    """
+    Multi-turn dialogue для написания письма.
+
+    Этапы:
+    1. Сбор информации (кому, цель письма, ключевые моменты)
+    2. Генерация черновика
+    3. Редактирование
+    4. Финализация
+    """
+
+    async def apply(self, user_message: str, context: Dict[str, Any]):
+        stage = context.get("letter_stage", "initial")
+
+        if stage == "initial":
+            return await self._gather_info(user_message, context)
+        elif stage == "draft":
+            return await self._generate_draft(context)
+        elif stage == "edit":
+            return await self._edit_draft(user_message, context)
+        elif stage == "finalize":
+            return await self._finalize(context)
+```
+
+2. **Добавить таблицу `letters`** (уже есть в БД):
+```sql
+-- Использовать существующую таблицу
+SELECT * FROM letters;
+```
+
+3. **Сохранять черновики**:
+- Пользователь может вернуться к редактированию
+- История версий письма
+- Аналитика: сколько писем написано, отправлено
+
+**Приоритет**: 🟡 Средний
+
+---
+
+### 3. Goal Tracking
+
+**Текущее состояние**: Таблица `goals` пустая
+
+**Реализовать**:
+
+1. **После 3-5 сообщений предложить цель**:
+```
+"Я слышу вашу ситуацию. Чего бы вы хотели достичь
+в отношениях с сыном в ближайшее время?"
+
+Варианты:
+- Восстановить регулярное общение
+- Написать письмо
+- Понять чувства ребёнка
+- Работать с собственными эмоциями
+```
+
+2. **Сохранять в БД**:
+```sql
+INSERT INTO goals (user_id, goal_text, target_date, status)
+VALUES ($1, $2, $3, 'active');
+```
+
+3. **Отслеживать прогресс**:
+- Еженедельные check-ins
+- "Как продвигается ваша цель?"
+- Обновлять status: 'active' → 'achieved' / 'modified'
+
+**Приоритет**: 🟡 Средний
+
+---
+
+## 🎯 Development Roadmap
+
+### Phase 1: Stability & Core Fixes (1-2 weeks) 🔥
+
+#### Week 1: Critical Bugs
+- [ ] Fix `total_messages` counter in database
+- [ ] Create `messages` table and implement persistence
+- [ ] Load message history on bot restart
+- [ ] Test conversation memory across restarts
+
+#### Week 2: PII Protection
+- [ ] Implement regex-based PII detection (email, phone, names)
+- [ ] Add PII masking in logs
+- [ ] Add PII removal before saving to database
+- [ ] Test with real PII examples
+
+**Success Criteria**:
+- [ ] Message count updates correctly in DB
+- [ ] Conversation history persists after bot restart
+- [ ] PII is masked in all logs and database
+
+---
+
+### Phase 2: Feature Enhancements (2-3 weeks) 🟡
+
+#### Letter Writing Flow
+- [ ] Create `LetterWritingAssistant` technique
+- [ ] Implement multi-turn dialogue for letter composition
+- [ ] Add draft generation with OpenAI
+- [ ] Implement editing and finalization
+- [ ] Save drafts to `letters` table
+- [ ] Add "resume letter" functionality
+
+#### Goal Tracking
+- [ ] Trigger goal setting after 3-5 messages
+- [ ] Create goal setting dialogue
+- [ ] Save goals to database
+- [ ] Implement weekly check-ins
+- [ ] Add goal progress tracking
+
+#### Metrics & Analytics
+- [ ] Track technique usage statistics
+- [ ] Measure average conversation length
+- [ ] Conversion rate: conversation → letter written
+- [ ] Emotional score trends over time
+- [ ] Dashboard for metrics (optional)
+
+**Success Criteria**:
+- [ ] Users can write complete letters through bot
+- [ ] Goals are set and tracked
+- [ ] Basic analytics dashboard shows key metrics
+
+---
+
+### Phase 3: ML Modules (3-4 weeks) 🟢
+
+#### Enable Disabled Modules
+- [ ] Fix Entity Extractor (spaCy)
+  - [ ] Use lightweight model `ru_core_news_sm`
+  - [ ] Add lazy loading
+  - [ ] Test with real messages
+
+- [ ] Fix Knowledge Retriever (RAG)
+  - [ ] Set up local FAISS vector DB
+  - [ ] Pre-compute embeddings for knowledge base
+  - [ ] Implement retrieval logic
+  - [ ] Test with PA-specific questions
+
+- [ ] Fix Emotion Detector (ML-based)
+  - [ ] Pre-download model weights
+  - [ ] Add timeout and fallback
+  - [ ] Compare with keyword-based (A/B test)
+
+- [ ] Optional: Speech Handler
+  - [ ] Install ffmpeg
+  - [ ] Integrate Whisper API
+  - [ ] Test with voice messages
+
+**Success Criteria**:
+- [ ] At least 3/4 disabled modules working
+- [ ] No performance degradation
+- [ ] Improved accuracy vs keyword-based baseline
+
+---
+
+### Phase 4: Advanced Features (4+ weeks) 🟢
+
+#### Personalization
+- [ ] Track user preferences (communication style, topics)
+- [ ] Adapt prompts based on user history
+- [ ] Suggest techniques based on past effectiveness
+
+#### Multi-language Support
+- [ ] English translation of prompts
+- [ ] Language detection
+- [ ] Bilingual support (RU/EN)
+
+#### Advanced Therapy Techniques
+- [ ] Expand IFS Parts Work usage
+- [ ] Add CBT exercises
+- [ ] Implement guided meditations
+- [ ] Add journaling prompts
+
+**Success Criteria**:
+- [ ] Responses are personalized to user
+- [ ] English-speaking users supported
+- [ ] Variety of techniques actively used
+
+---
+
+## 👥 Contribution Guidelines
+
+### For Contributors
+
+#### Getting Started
+1. Clone repository: `git clone <repo-url>`
+2. Install dependencies: `pip install -r requirements.txt`
+3. Set up database: `./setup_db.sh`
+4. Copy `.env.example` to `.env` and configure
+5. Run tests: `pytest tests/`
+6. Start bot: `python main.py`
+
+#### Code Style
+- Follow PEP 8
+- Use type hints
+- Add docstrings to all functions
+- Maximum line length: 100 characters
+
+#### Testing
+- Write unit tests for new features
+- Integration tests for API changes
+- Manual testing checklist for UI changes
+
+#### Pull Request Process
+1. Create feature branch: `feature/your-feature-name`
+2. Make changes with clear commit messages
+3. Update documentation
+4. Run tests
+5. Submit PR with description of changes
+
+---
+
+## 📚 Technical Documentation
+
+### System Architecture
+See: `ARCHITECTURE_ANALYSIS.md`
+
+### Applied Fixes
+See: `FIXES_APPLIED.md`
+
+### Session Analysis
+See: `SESSION_ANALYSIS.md`
+
+### API Documentation
+See: `docs/API.md` (TODO)
+
+---
+
+## 🐛 Known Issues
+
+### Critical
+1. **total_messages counter broken** - See Bug #1
+2. **Message history not persisted** - See Bug #2
+3. **PII not protected** - Module disabled
+
+### High Priority
+4. **ML modules disabled** - See disabled modules section
+5. **No error recovery for OpenAI API failures**
+6. **Multiple bot instances cause conflicts** - Need single instance lock
+
+### Medium Priority
+7. **Letter writing flow is basic** - Needs multi-turn dialogue
+8. **Goal tracking not implemented** - Table exists but unused
+9. **No metrics/analytics** - Can't measure effectiveness
+
+### Low Priority
+10. **Voice messages not supported** - Speech handler disabled
+11. **No bilingual support** - Russian only
+12. **Crisis detection is keyword-based** - Could be more accurate with ML
+
+---
+
+## 📊 Performance Benchmarks
+
+### Current Performance (v0.2.0)
+- **Average Response Time**: ~2-3 seconds
+- **OpenAI API Latency**: ~1.5 seconds
+- **Database Query Time**: <100ms
+- **Memory Usage**: ~200MB per instance
+- **Concurrent Users Supported**: ~50-100 (untested)
+
+### Performance Goals (v1.0.0)
+- **Average Response Time**: <2 seconds
+- **Database Query Time**: <50ms
+- **Concurrent Users**: 500+
+- **Uptime**: 99.9%
+
+---
+
+## 🔒 Security Considerations
+
+### Current Security Measures
+- ✅ Environment variables for secrets
+- ✅ PostgreSQL with authentication
+- ✅ Supervisor agent for content safety
+- ✅ Crisis detection and intervention
+- ❌ PII protection (disabled)
+- ❌ Rate limiting (not implemented)
+- ❌ Input validation (basic)
+
+### TODO
+- [ ] Implement PII masking
+- [ ] Add rate limiting per user
+- [ ] Input sanitization for SQL injection
+- [ ] Audit logging for sensitive actions
+- [ ] GDPR compliance (data deletion on request)
+
+---
+
+## 📞 Support & Contact
+
+### For Development Questions
+- GitHub Issues: <repo-url>/issues
+- Email: dev@pas-bot.com (TODO)
+
+### For Bug Reports
+- Use GitHub Issues template
+- Include: OS, Python version, error logs
+- Steps to reproduce
+
+### For Feature Requests
+- GitHub Discussions
+- Describe use case and expected behavior
+
+---
+
+## 📜 License
+
+MIT License (see LICENSE file)
+
+---
+
+## 🎉 Acknowledgments
+
+- OpenAI for GPT-4 API
+- Telegram for Bot API
+- LangChain team for LangGraph
+- All contributors and testers
+
+---
+
+**Last Updated**: 2025-11-08
+**Version**: 0.2.0 (Working MVP)
+**Status**: Active Development

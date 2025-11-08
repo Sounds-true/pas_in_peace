@@ -86,6 +86,36 @@ class PASBot:
 
         await update.message.reply_text(help_text)
 
+    async def letter_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /letter command - start letter writing."""
+        user_id = str(update.effective_user.id)
+
+        log_user_interaction(
+            logger,
+            user_id=user_id,
+            message_type="command",
+            command="letter"
+        )
+
+        # Process through state manager with "письмо" keyword
+        response = await self.state_manager.process_message(user_id, "хочу написать письмо")
+        await update.message.reply_text(response)
+
+    async def goals_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /goals command - view goals."""
+        user_id = str(update.effective_user.id)
+
+        log_user_interaction(
+            logger,
+            user_id=user_id,
+            message_type="command",
+            command="goals"
+        )
+
+        # Process through state manager with "цель" keyword
+        response = await self.state_manager.process_message(user_id, "покажи мои цели")
+        await update.message.reply_text(response)
+
     async def crisis_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /crisis command - immediate crisis resources."""
         user_id = str(update.effective_user.id)
@@ -288,6 +318,8 @@ class PASBot:
         # Command handlers
         app.add_handler(CommandHandler("start", self.start_command))
         app.add_handler(CommandHandler("help", self.help_command))
+        app.add_handler(CommandHandler("letter", self.letter_command))
+        app.add_handler(CommandHandler("goals", self.goals_command))
         app.add_handler(CommandHandler("crisis", self.crisis_command))
         app.add_handler(CommandHandler("privacy", self.privacy_command))
 
@@ -300,28 +332,40 @@ class PASBot:
         setup_logging(settings.log_level)
 
         # Create application
+        logger.info("creating_telegram_application")
         self.app = Application.builder().token(
             settings.telegram_bot_token.get_secret_value()
         ).build()
+        logger.info("telegram_application_created")
 
         # Setup handlers
+        logger.info("setting_up_handlers")
         self.setup_handlers(self.app)
+        logger.info("handlers_setup_complete")
 
         # Setup bot commands
-        await self.setup_bot_commands(self.app)
+        # TEMPORARILY DISABLED - May be hanging during Telegram API call
+        # await self.setup_bot_commands(self.app)
 
         # Initialize components
+        logger.info("about_to_init_crisis_detector")
         await self.crisis_detector.initialize()
+        logger.info("about_to_init_state_manager")
         await self.state_manager.initialize()
+        logger.info("state_manager_init_completed")
 
         # Initialize PII protector (optional)
-        try:
-            await self.pii_protector.initialize()
-            logger.info("pii_protector_enabled")
-        except Exception as e:
-            logger.warning("pii_protector_disabled", reason=str(e))
+        # TEMPORARILY DISABLED - Hangs during Spacy model loading
+        # try:
+        #     await self.pii_protector.initialize()
+        #     logger.info("pii_protector_enabled")
+        # except Exception as e:
+        #     logger.warning("pii_protector_disabled", reason=str(e))
+        logger.warning("pii_protector_disabled", reason="Temporarily disabled due to model loading hang")
 
+        logger.info("about_to_complete_initialization")
         logger.info("bot_initialized", environment=settings.environment)
+        logger.info("initialization_complete")
 
     async def run_polling(self) -> None:
         """Run bot in polling mode (development)."""

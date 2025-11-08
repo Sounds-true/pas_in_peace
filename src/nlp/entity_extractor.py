@@ -1,7 +1,7 @@
 """Entity extraction for PA context using Natasha."""
 
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 import re
 

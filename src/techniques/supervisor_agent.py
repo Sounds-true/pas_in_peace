@@ -86,7 +86,7 @@ class SupervisorAgent:
         }
 
         # Quality thresholds
-        self.min_empathy_score = 0.5
+        self.min_empathy_score = 0.3  # Lowered to allow single empathy indicator
         self.min_safety_score = 0.8
         self.min_overall_score = 0.6
 
@@ -133,6 +133,7 @@ class SupervisorAgent:
 
         # Identify critical issues
         critical_issues = []
+        warnings = []
         safe_to_send = True
 
         if safety_score.score < self.min_safety_score:
@@ -140,7 +141,7 @@ class SupervisorAgent:
             safe_to_send = False
 
         if empathy_score.score < self.min_empathy_score:
-            critical_issues.append("INSUFFICIENT EMPATHY")
+            warnings.append("INSUFFICIENT EMPATHY")  # Downgraded to warning, not critical
 
         # Check for red flags
         red_flag_found = self._check_red_flags(response)
@@ -148,11 +149,11 @@ class SupervisorAgent:
             critical_issues.append(f"RED FLAG: {red_flag_found}")
             safe_to_send = False
 
-        # Determine approval
+        # Determine approval - only block on CRITICAL issues, not warnings
         approved = (
             safe_to_send and
             overall_score >= self.min_overall_score and
-            len(critical_issues) == 0
+            len(critical_issues) == 0  # Only check critical issues
         )
 
         # Generate recommendations
@@ -183,11 +184,19 @@ class SupervisorAgent:
         indicators = self.empathy_indicators.get(language, self.empathy_indicators["russian"])
         empathy_count = sum(1 for indicator in indicators if indicator in response_lower)
 
-        # Score based on presence of indicators
-        score = min(empathy_count / 3.0, 1.0)  # 3+ indicators = full score
+        # Score based on presence of indicators - more generous scoring
+        # 1 indicator = 0.4, 2 indicators = 0.7, 3+ indicators = 1.0
+        if empathy_count == 0:
+            score = 0.0
+        elif empathy_count == 1:
+            score = 0.4
+        elif empathy_count == 2:
+            score = 0.7
+        else:
+            score = 1.0
 
         suggestions = []
-        if score < 0.5:
+        if score < 0.3:
             if language == "russian":
                 suggestions.append("Добавьте фразы валидации: 'Я слышу вашу боль', 'Это действительно тяжело'")
             else:

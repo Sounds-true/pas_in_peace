@@ -1,6 +1,6 @@
 """Speech-to-text handler for voice messages."""
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from pathlib import Path
 import asyncio
 from dataclasses import dataclass
@@ -10,6 +10,8 @@ try:
     SPEECH_RECOGNITION_AVAILABLE = True
 except ImportError:
     SPEECH_RECOGNITION_AVAILABLE = False
+    if TYPE_CHECKING:
+        import speech_recognition as sr
 
 try:
     from pydub import AudioSegment
@@ -152,7 +154,7 @@ class SpeechHandler:
 
     async def _transcribe_google(
         self,
-        audio_data: sr.AudioData,
+        audio_data: "sr.AudioData",
         duration: float
     ) -> Optional[TranscriptionResult]:
         """Transcribe using Google Speech Recognition (free)."""
@@ -182,7 +184,7 @@ class SpeechHandler:
 
     async def _transcribe_sphinx(
         self,
-        audio_data: sr.AudioData,
+        audio_data: "sr.AudioData",
         duration: float
     ) -> Optional[TranscriptionResult]:
         """Transcribe using Sphinx (offline)."""
@@ -210,7 +212,7 @@ class SpeechHandler:
 
     async def _transcribe_whisper(
         self,
-        audio_data: sr.AudioData,
+        audio_data: "sr.AudioData",
         duration: float
     ) -> Optional[TranscriptionResult]:
         """

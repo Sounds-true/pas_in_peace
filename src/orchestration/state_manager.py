@@ -82,15 +82,16 @@ class StateManager:
         """Initialize state manager."""
         self.user_states: Dict[str, UserState] = {}
         self.graph: Optional[StateGraph] = None
-        self.guardrails = GuardrailsManager()
-        self.emotion_detector = EmotionDetector()
 
-        # Initialize new NLP components
-        self.entity_extractor = EntityExtractor()
-        self.intent_classifier = IntentClassifier()
-        self.speech_handler = SpeechHandler(backend='google', language='ru-RU')
+        # Will be initialized in async initialize() method
+        self.guardrails = None
+        self.emotion_detector = None
+        self.entity_extractor = None
+        self.intent_classifier = None
+        self.speech_handler = None
+        self.knowledge_retriever = None
 
-        # Initialize therapeutic techniques (legacy support)
+        # Initialize therapeutic techniques (lightweight, no ML)
         self.techniques = {
             "cbt": CBTReframing(),
             "grounding": GroundingTechnique(),
@@ -98,19 +99,10 @@ class StateManager:
             "active_listening": ActiveListening()
         }
 
-        # Initialize new technique orchestrator with advanced selection
+        # Initialize orchestrator and other lightweight components
         self.technique_orchestrator = TechniqueOrchestrator()
-
-        # Initialize RAG retriever
-        self.knowledge_retriever = KnowledgeRetriever()
-
-        # Initialize metrics collector
         self.metrics_collector = MetricsCollector()
-
-        # Initialize legal tools handler
         self.legal_tools = LegalToolsHandler()
-
-        # Initialize database manager
         self.db = DatabaseManager()
 
         self.initialized = False
@@ -128,63 +120,87 @@ class StateManager:
                 self.db = None
 
             # Try to initialize guardrails (optional for MVP)
-            try:
-                await self.guardrails.initialize()
-                logger.info("guardrails_enabled")
-            except Exception as e:
-                logger.warning("guardrails_disabled", reason=str(e))
-                self.guardrails = None
+            # TEMPORARILY DISABLED - Guardrails causes hanging during initialization
+            # try:
+            #     await self.guardrails.initialize()
+            #     logger.info("guardrails_enabled")
+            # except Exception as e:
+            #     logger.warning("guardrails_disabled", reason=str(e))
+            #     self.guardrails = None
+            logger.warning("guardrails_disabled", reason="Temporarily disabled due to initialization issues")
+            self.guardrails = None
 
             # Initialize emotion detector (optional for MVP)
-            try:
-                await self.emotion_detector.initialize()
-                logger.info("emotion_detector_enabled")
-            except Exception as e:
-                logger.warning("emotion_detector_disabled", reason=str(e))
-                # Continue without emotion detector - will use keyword fallback
+            # TEMPORARILY DISABLED - Emotion Detector causes hanging during model loading
+            # try:
+            #     await self.emotion_detector.initialize()
+            #     logger.info("emotion_detector_enabled")
+            # except Exception as e:
+            #     logger.warning("emotion_detector_disabled", reason=str(e))
+            #     # Continue without emotion detector - will use keyword fallback
+            logger.warning("emotion_detector_disabled", reason="Temporarily disabled due to initialization hang")
+            self.emotion_detector = None
 
             # Initialize RAG retriever and load knowledge base
-            try:
-                await self.knowledge_retriever.initialize()
-                # Load knowledge base documents
-                documents = PAKnowledgeBase.get_all_documents()
-                await self.knowledge_retriever.add_documents(documents)
-                logger.info("knowledge_retriever_enabled", doc_count=len(documents))
-            except Exception as e:
-                logger.warning("knowledge_retriever_disabled", reason=str(e))
-                # Continue without RAG - will use only predefined responses
+            # TEMPORARILY DISABLED - RAG initialization causes hanging during model loading
+            # try:
+            #     await self.knowledge_retriever.initialize()
+            #     # Load knowledge base documents
+            #     documents = PAKnowledgeBase.get_all_documents()
+            #     await self.knowledge_retriever.add_documents(documents)
+            #     logger.info("knowledge_retriever_enabled", doc_count=len(documents))
+            # except Exception as e:
+            #     logger.warning("knowledge_retriever_disabled", reason=str(e))
+            #     # Continue without RAG - will use only predefined responses
+            logger.warning("knowledge_retriever_disabled", reason="Temporarily disabled due to initialization hang")
+            self.knowledge_retriever = None
 
             # Initialize entity extractor (optional)
-            try:
-                await self.entity_extractor.initialize()
-                logger.info("entity_extractor_enabled")
-            except Exception as e:
-                logger.warning("entity_extractor_disabled", reason=str(e))
-                # Continue without entity extraction - will work without context enrichment
+            # TEMPORARILY DISABLED - Hangs during initialization like other ML components
+            # try:
+            #     await self.entity_extractor.initialize()
+            #     logger.info("entity_extractor_enabled")
+            # except Exception as e:
+            #     logger.warning("entity_extractor_disabled", reason=str(e))
+            #     # Continue without entity extraction - will work without context enrichment
+            logger.warning("entity_extractor_disabled", reason="Temporarily disabled due to initialization hang")
+            self.entity_extractor = None
 
             # Initialize intent classifier (optional)
-            try:
-                await self.intent_classifier.initialize()
-                logger.info("intent_classifier_enabled")
-            except Exception as e:
-                logger.warning("intent_classifier_disabled", reason=str(e))
-                # Continue without intent classification - will use state machine only
+            # TEMPORARILY DISABLED - Hangs during initialization like other ML components
+            # try:
+            #     await self.intent_classifier.initialize()
+            #     logger.info("intent_classifier_enabled")
+            # except Exception as e:
+            #     logger.warning("intent_classifier_disabled", reason=str(e))
+            #     # Continue without intent classification - will use state machine only
+            logger.warning("intent_classifier_disabled", reason="Temporarily disabled due to initialization hang")
+            self.intent_classifier = None
 
             # Initialize speech handler (optional)
-            try:
-                if self.speech_handler.is_available():
-                    await self.speech_handler.initialize()
-                    logger.info("speech_handler_enabled", backend=self.speech_handler.backend)
-                else:
-                    logger.warning("speech_handler_unavailable",
-                                  message="Install: pip install SpeechRecognition pydub")
-                    self.speech_handler = None
-            except Exception as e:
-                logger.warning("speech_handler_disabled", reason=str(e))
-                self.speech_handler = None
+            # TEMPORARILY DISABLED - Skip to avoid potential initialization hang
+            # try:
+            #     if self.speech_handler.is_available():
+            #         await self.speech_handler.initialize()
+            #         logger.info("speech_handler_enabled", backend=self.speech_handler.backend)
+            #     else:
+            #         logger.warning("speech_handler_unavailable",
+            #                       message="Install: pip install SpeechRecognition pydub")
+            #         self.speech_handler = None
+            # except Exception as e:
+            #     logger.warning("speech_handler_disabled", reason=str(e))
+            #     self.speech_handler = None
+            logger.warning("speech_handler_disabled", reason="Temporarily disabled")
+            self.speech_handler = None
 
             # Build the state graph
-            self.graph = self._build_state_graph()
+            logger.info("about_to_build_state_graph")
+            try:
+                self.graph = self._build_state_graph()
+                logger.info("state_graph_built")
+            except Exception as e:
+                logger.error("state_graph_build_failed", error=str(e), exc_info=True)
+                raise
 
             self.initialized = True
             logger.info("state_manager_initialized")
@@ -195,8 +211,10 @@ class StateManager:
 
     def _build_state_graph(self) -> StateGraph:
         """Build the LangGraph state machine."""
+        logger.info("creating_state_graph_workflow")
         # Create the graph
         workflow = StateGraph(Dict[str, Any])
+        logger.info("workflow_created")
 
         # Add nodes for each state
         workflow.add_node("start", self._handle_start)
@@ -238,7 +256,7 @@ class StateManager:
             self._route_after_high_distress,
             {
                 "technique": "technique_selection",
-                "reassess": "emotion_check"
+                "reassess": END  # End conversation, wait for next user message
             }
         )
 
@@ -250,7 +268,7 @@ class StateManager:
                 "technique": "technique_selection",
                 "letter": "letter_writing",
                 "goals": "goal_tracking",
-                "continue": "emotion_check"
+                "continue": "technique_selection"  # Use orchestrator for conversational responses
             }
         )
 
@@ -260,8 +278,8 @@ class StateManager:
             self._route_after_casual_chat,
             {
                 "emotion_shift": "emotion_check",
-                "end": "end_session",
-                "continue": "casual_chat"
+                "end": "end_session",  # Only say goodbye when user explicitly says goodbye
+                "continue": "technique_selection"  # Use orchestrator for conversational responses
             }
         )
 
@@ -271,7 +289,7 @@ class StateManager:
             "technique_execution",
             self._route_after_technique,
             {
-                "success": "moderate_support",
+                "success": END,  # End after technique to wait for next user message
                 "retry": "technique_selection"
             }
         )
@@ -285,7 +303,10 @@ class StateManager:
         # End session
         workflow.add_edge("end_session", END)
 
-        return workflow.compile()
+        logger.info("compiling_workflow")
+        compiled = workflow.compile()
+        logger.info("workflow_compiled")
+        return compiled
 
     async def initialize_user(self, user_id: str) -> None:
         """Initialize a new user state, loading from database if exists."""
@@ -369,8 +390,11 @@ class StateManager:
         import time
         start_time = time.time()
 
+        logger.info("process_message_started", user_id=user_id, message_preview=message[:50])
+
         if not self.initialized:
             await self.initialize()
+            logger.info("state_manager_initialized_in_process")
 
         # Get or create user state
         user_state = self.user_states.get(user_id)
@@ -383,8 +407,12 @@ class StateManager:
         user_state.messages_count += 1
         user_state.message_history.append(HumanMessage(content=message))
 
-        # Check guardrails
-        guardrail_check = await self.guardrails.check_message(message, {"user_id": user_id})
+        # Check guardrails (if enabled)
+        if self.guardrails:
+            guardrail_check = await self.guardrails.check_message(message, {"user_id": user_id})
+        else:
+            guardrail_check = {"allowed": True}
+
         if not guardrail_check["allowed"]:
             logger.warning(
                 "message_blocked_by_guardrails",
@@ -495,16 +523,21 @@ class StateManager:
                 "timestamp": datetime.now().isoformat()
             }
 
+            logger.info("invoking_state_graph", user_id=user_id, message_length=len(message))
             # Run the graph
             result = await self.graph.ainvoke(graph_state)
+            logger.info("state_graph_completed", user_id=user_id)
 
             # Extract response
             response = result.get("response", "I'm here to support you. How can I help?")
 
-            # Apply guardrails to response
-            safe_response = await self.guardrails.generate_safe_response(
-                message, response, {"user_id": user_id}
-            )
+            # Apply guardrails to response (if enabled)
+            if self.guardrails:
+                safe_response = await self.guardrails.generate_safe_response(
+                    message, response, {"user_id": user_id}
+                )
+            else:
+                safe_response = response
 
             # Update message history
             user_state.message_history.append(SystemMessage(content=safe_response))
@@ -609,37 +642,37 @@ class StateManager:
     async def _handle_high_distress(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle high distress state."""
         state["response"] = (
-            "I can sense you're going through something very difficult. "
-            "Let's take this one step at a time. Would you like to try a grounding exercise, "
-            "or would you prefer to tell me more about what's happening?"
+            "Я чувствую, что вы проходите через очень трудное время. "
+            "Давайте разберемся с этим по шагам. Хотите ли вы попробовать упражнение на заземление, "
+            "или вы предпочитаете рассказать мне больше о том, что происходит?"
         )
         return state
 
     async def _handle_moderate_support(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle moderate support state."""
         state["response"] = (
-            "Thank you for sharing. I'm here to support you. "
-            "Would you like to explore your feelings further, work on a letter, "
-            "or perhaps set some goals for moving forward?"
+            "Спасибо, что поделились со мной. Я здесь, чтобы поддержать вас. "
+            "Хотите ли вы поговорить о своих чувствах подробнее, поработать над письмом, "
+            "или возможно, поставить цели для движения вперед?"
         )
         return state
 
     async def _handle_casual_chat(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle casual chat state."""
-        state["response"] = "I'm glad to chat with you. What's on your mind?"
+        state["response"] = "Я рад пообщаться с вами. О чем вы хотите поговорить?"
         return state
 
     async def _handle_letter_writing(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle letter writing state."""
         state["response"] = (
-            "Let's work on a letter together. "
-            "Who would you like to write to, and what's the main message you want to convey?"
+            "Давайте вместе поработаем над письмом. "
+            "Кому вы хотите написать, и какую главную мысль хотите передать?"
         )
         return state
 
     async def _handle_goal_tracking(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle goal tracking state."""
-        state["response"] = "Let's review your goals. What would you like to focus on?"
+        state["response"] = "Давайте посмотрим на ваши цели. На чем вы хотите сосредоточиться?"
         return state
 
     async def _handle_technique_selection(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -654,7 +687,8 @@ class StateManager:
             "emotion": primary_emotion,
             "emotion_intensity": emotional_intensity,
             "language": "russian",
-            "message_count": user_state.messages_count
+            "message_count": user_state.messages_count,
+            "user_state": user_state  # CRITICAL: Pass user_state for message history
         }
 
         # Map crisis_level to risk_level for orchestrator
@@ -804,8 +838,8 @@ class StateManager:
     async def _handle_end_session(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle end session state."""
         state["response"] = (
-            "Thank you for our conversation today. "
-            "Remember, I'm here whenever you need support. Take care."
+            "Спасибо за наш разговор сегодня. "
+            "Помните, я здесь, когда вам понадобится поддержка. Берегите себя."
         )
         return state
 
