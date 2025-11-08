@@ -138,6 +138,12 @@ class LetterWritingAssistant(Technique):
         # Move to gathering stage
         letter_ctx.current_stage = LetterStage.GATHERING
 
+        # Record that letter writing was started (for conversion tracking)
+        metrics_collector = context.get("metrics_collector")
+        user_state = context.get("user_state")
+        if metrics_collector and user_state:
+            await metrics_collector.record_letter_started(user_state.user_id)
+
         return TechniqueResult(
             success=True,
             response=response,
@@ -473,6 +479,12 @@ _Редактирую письмо..._"""
                     )
                     letter_ctx.letter_id = letter.id
                     logger.info("letter_created", letter_id=letter.id)
+
+                    # Record letter completion for conversion tracking
+                    metrics_collector = context.get("metrics_collector")
+                    if metrics_collector:
+                        await metrics_collector.record_letter_completed(user_state.user_id)
+
             except Exception as e:
                 logger.error("letter_save_failed", error=str(e))
                 # Continue even if save fails

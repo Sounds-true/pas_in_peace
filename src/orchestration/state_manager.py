@@ -803,8 +803,15 @@ class StateManager:
             "language": "russian",
             "message_count": user_state.messages_count,
             "user_state": user_state,  # CRITICAL: Pass user_state for message history
-            "db": self.db  # Add database manager for techniques that need persistence
+            "db": self.db,  # Add database manager for techniques that need persistence
+            "metrics_collector": self.metrics_collector  # Add metrics collector for conversion tracking
         }
+
+        # Record emotional state for analytics
+        await self.metrics_collector.record_emotional_state(
+            emotional_score=user_state.emotional_score,
+            distress_level=user_state.crisis_level
+        )
 
         # Map crisis_level to risk_level for orchestrator
         if user_state.crisis_level > 0.7:
@@ -875,7 +882,8 @@ class StateManager:
             "distress_level": state.get("distress_level", "moderate"),
             "emotional_intensity": state.get("emotional_intensity", 0.5),
             "user_state": state["user_state"],
-            "db": self.db  # Add database manager for techniques that need persistence
+            "db": self.db,  # Add database manager for techniques that need persistence
+            "metrics_collector": self.metrics_collector  # Add metrics collector for conversion tracking
         }
 
         # Apply the technique

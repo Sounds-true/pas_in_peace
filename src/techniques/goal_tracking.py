@@ -335,6 +335,11 @@ class GoalTrackingAssistant(Technique):
                     goal_ctx.goal_id = goal.id
                     logger.info("goal_created", goal_id=goal.id, user_id=user_state.user_id)
 
+                    # Record goal creation for conversion tracking
+                    metrics_collector = context.get("metrics_collector")
+                    if metrics_collector:
+                        await metrics_collector.record_goal_created(user_state.user_id)
+
                     response = f"""🎉 **Цель сохранена!**
 
 Я буду периодически спрашивать о вашем прогрессе.
