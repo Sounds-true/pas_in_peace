@@ -1,10 +1,15 @@
 """Crisis detection using SuicidalBERT and other safety models."""
 
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from typing import Tuple, Optional, Dict, Any
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+
+try:
+    import torch
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
 
 from src.core.logger import get_logger, log_safety_event
 from src.core.config import settings

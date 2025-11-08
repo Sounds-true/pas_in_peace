@@ -248,3 +248,60 @@ class Letter(Base):
 
     # Relationships
     user = relationship("User", back_populates="letters")
+
+
+class MetricsSnapshot(Base):
+    """Metrics snapshot for analytics and monitoring."""
+
+    __tablename__ = "metrics_snapshots"
+
+    id = Column(Integer, primary_key=True)
+
+    # Snapshot metadata
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    period = Column(String(20), default="1h")  # 1h, 24h, 7d, 30d
+
+    # Usage metrics
+    total_messages = Column(Integer, default=0)
+    total_sessions = Column(Integer, default=0)
+    active_users = Column(Integer, default=0)
+    avg_messages_per_session = Column(Float, default=0.0)
+    avg_session_duration_minutes = Column(Float, default=0.0)
+
+    # Technique usage distribution
+    techniques_distribution = Column(JSON, default=dict)  # {"cbt": 10, "validation": 5, ...}
+
+    # Conversion metrics
+    conversations_total = Column(Integer, default=0)
+    letters_started = Column(Integer, default=0)
+    letters_completed = Column(Integer, default=0)
+    goals_created = Column(Integer, default=0)
+    conversion_rate_letters = Column(Float, default=0.0)  # % of conversations that led to letters
+    conversion_rate_goals = Column(Float, default=0.0)  # % of conversations that led to goals
+
+    # Emotional trends
+    emotions_detected = Column(JSON, default=dict)  # {"sadness": 15, "anger": 8, ...}
+    avg_emotional_score = Column(Float, default=0.0)  # 0-1 scale
+    avg_distress_level = Column(Float, default=0.0)  # 0-1 scale
+
+    # Safety metrics
+    crisis_detections = Column(Integer, default=0)
+    pii_warnings = Column(Integer, default=0)
+
+    # Quality metrics
+    avg_empathy_score = Column(Float, default=0.0)
+    avg_safety_score = Column(Float, default=0.0)
+    avg_therapeutic_value = Column(Float, default=0.0)
+
+    # Technical metrics
+    total_requests = Column(Integer, default=0)
+    failed_requests = Column(Integer, default=0)
+    avg_response_time_seconds = Column(Float, default=0.0)
+    p95_response_time_seconds = Column(Float, default=0.0)
+    error_rate_percent = Column(Float, default=0.0)
+    api_calls_openai = Column(Integer, default=0)
+
+    # Additional analytics
+    peak_hour = Column(Integer)  # Hour of day with most activity (0-23)
+    most_used_technique = Column(String(50))
+    most_detected_emotion = Column(String(50))

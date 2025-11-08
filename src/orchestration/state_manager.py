@@ -8,7 +8,7 @@ from pathlib import Path
 import asyncio
 
 from langgraph.graph import StateGraph, END
-from langchain.schema import BaseMessage, HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 
 from src.core.logger import get_logger
 from src.core.config import settings
@@ -21,7 +21,9 @@ from src.techniques import (
     CBTReframing,
     GroundingTechnique,
     ValidationTechnique,
-    ActiveListening
+    ActiveListening,
+    LetterWritingAssistant,
+    GoalTrackingAssistant
 )
 from src.techniques.orchestrator import TechniqueOrchestrator
 from src.rag import KnowledgeRetriever, PAKnowledgeBase
@@ -29,6 +31,7 @@ from src.monitoring import MetricsCollector
 from src.legal import LegalToolsHandler
 from src.storage.database import DatabaseManager
 from src.storage.models import ConversationStateEnum, TherapyPhaseEnum
+from src.nlp.simple_pii_protector import SimplePIIProtector
 
 
 logger = get_logger(__name__)
@@ -85,18 +88,20 @@ class StateManager:
 
         # Will be initialized in async initialize() method
         self.guardrails = None
-        self.emotion_detector = None
-        self.entity_extractor = None
-        self.intent_classifier = None
-        self.speech_handler = None
-        self.knowledge_retriever = None
+        self.emotion_detector = EmotionDetector()
+        self.entity_extractor = EntityExtractor()
+        self.intent_classifier = None  # Still disabled - not critical for MVP
+        self.speech_handler = None  # Still disabled - not critical for MVP
+        self.knowledge_retriever = KnowledgeRetriever()
 
         # Initialize therapeutic techniques (lightweight, no ML)
         self.techniques = {
             "cbt": CBTReframing(),
             "grounding": GroundingTechnique(),
             "validation": ValidationTechnique(),
-            "active_listening": ActiveListening()
+            "active_listening": ActiveListening(),
+            "letter_writing": LetterWritingAssistant(),
+            "goal_tracking": GoalTrackingAssistant()
         }
 
         # Initialize orchestrator and other lightweight components
@@ -104,6 +109,7 @@ class StateManager:
         self.metrics_collector = MetricsCollector()
         self.legal_tools = LegalToolsHandler()
         self.db = DatabaseManager()
+        self.pii_protector = SimplePIIProtector()  # NEW: Simple PII protection
 
         self.initialized = False
 
@@ -130,41 +136,41 @@ class StateManager:
             logger.warning("guardrails_disabled", reason="Temporarily disabled due to initialization issues")
             self.guardrails = None
 
-            # Initialize emotion detector (optional for MVP)
-            # TEMPORARILY DISABLED - Emotion Detector causes hanging during model loading
-            # try:
-            #     await self.emotion_detector.initialize()
-            #     logger.info("emotion_detector_enabled")
-            # except Exception as e:
-            #     logger.warning("emotion_detector_disabled", reason=str(e))
-            #     # Continue without emotion detector - will use keyword fallback
-            logger.warning("emotion_detector_disabled", reason="Temporarily disabled due to initialization hang")
-            self.emotion_detector = None
+            # Initialize emotion detector (optional for MVP, with timeout protection)
+            try:
+                success = await self.emotion_detector.initialize(timeout=15.0)
+                if success:
+                    logger.info("emotion_detector_enabled")
+                else:
+                    logger.warning("emotion_detector_disabled", reason="Initialization failed, will use keyword fallback")
+                    self.emotion_detector = None
+            except Exception as e:
+                logger.warning("emotion_detector_disabled", reason=str(e))
+                self.emotion_detector = None
 
-            # Initialize RAG retriever and load knowledge base
-            # TEMPORARILY DISABLED - RAG initialization causes hanging during model loading
-            # try:
-            #     await self.knowledge_retriever.initialize()
-            #     # Load knowledge base documents
-            #     documents = PAKnowledgeBase.get_all_documents()
-            #     await self.knowledge_retriever.add_documents(documents)
-            #     logger.info("knowledge_retriever_enabled", doc_count=len(documents))
-            # except Exception as e:
-            #     logger.warning("knowledge_retriever_disabled", reason=str(e))
-            #     # Continue without RAG - will use only predefined responses
-            logger.warning("knowledge_retriever_disabled", reason="Temporarily disabled due to initialization hang")
-            self.knowledge_retriever = None
+            # Initialize RAG retriever and load knowledge base (with timeout protection)
+            try:
+                await self.knowledge_retriever.initialize(timeout=20.0)
+                # Load knowledge base documents
+                documents = PAKnowledgeBase.get_all_documents()
+                await self.knowledge_retriever.add_documents(documents)
+                logger.info("knowledge_retriever_enabled", doc_count=len(documents))
+            except Exception as e:
+                logger.warning("knowledge_retriever_disabled", reason=str(e))
+                # Continue without RAG - will use keyword fallback
+                self.knowledge_retriever = None
 
-            # Initialize entity extractor (optional)
-            # TEMPORARILY DISABLED - Hangs during initialization like other ML components
-            # try:
-            #     await self.entity_extractor.initialize()
-            #     logger.info("entity_extractor_enabled")
-            # except Exception as e:
-            #     logger.warning("entity_extractor_disabled", reason=str(e))
-            #     # Continue without entity extraction - will work without context enrichment
-            logger.warning("entity_extractor_disabled", reason="Temporarily disabled due to initialization hang")
-            self.entity_extractor = None
+            # Initialize entity extractor (optional, with timeout protection)
+            try:
+                success = await self.entity_extractor.initialize()
+                if success:
+                    logger.info("entity_extractor_enabled", backend="natasha")
+                else:
+                    logger.info("entity_extractor_enabled", backend="regex_fallback")
+                    # Entity extractor will use pattern-based fallback
+            except Exception as e:
+                logger.warning("entity_extractor_error", reason=str(e))
+                # Entity extractor will use pattern-based fallback
 
             # Initialize intent classifier (optional)
             # TEMPORARILY DISABLED - Hangs during initialization like other ML components
@@ -373,15 +379,17 @@ class StateManager:
             return  # No database available, skip save
 
         try:
-            # Update user in database
+            # Update user in database (includes Bug #1 fix: total_messages)
             await self.db.update_user_state(
                 telegram_id=user_state.user_id,
                 state=user_state.current_state.value,
                 emotional_score=user_state.emotional_score,
                 crisis_level=user_state.crisis_level,
                 therapy_phase=user_state.therapy_phase.value,
+                total_messages=user_state.messages_count,  # NEW: Fix Bug #1
             )
-            logger.debug("user_state_saved", user_id=user_state.user_id)
+            logger.debug("user_state_saved", user_id=user_state.user_id,
+                        total_messages=user_state.messages_count)
         except Exception as e:
             logger.error("user_state_save_failed",
                         user_id=user_state.user_id,
@@ -403,9 +411,25 @@ class StateManager:
             # Get user from database to get internal user ID
             db_user = await self.db.get_or_create_user(user_id)
 
+            # PII Protection: Anonymize content before saving
+            # Detect PII and log statistics
+            pii_stats = self.pii_protector.get_statistics(content)
+            if pii_stats:
+                logger.warning("pii_detected_in_message",
+                             user_id=user_id,
+                             role=role,
+                             pii_types=pii_stats)
+
+            # Anonymize sensitive content (keep names for therapy context)
+            anonymized_content = self.pii_protector.anonymize(
+                content,
+                entity_types=["EMAIL", "PHONE", "CREDIT_CARD", "PASSPORT", "SNILS"]
+                # Note: PERSON_NAME not anonymized - needed for therapy context
+            )
+
             # Calculate content hash for deduplication
             import hashlib
-            content_hash = hashlib.sha256(content.encode()).hexdigest()
+            content_hash = hashlib.sha256(anonymized_content.encode()).hexdigest()
 
             # Extract metadata
             metadata = metadata or {}
@@ -417,12 +441,12 @@ class StateManager:
             guardrail_triggered = metadata.get("guardrail_triggered")
             conversation_state = metadata.get("conversation_state")
 
-            # Save message
+            # Save message with PII protection
             await self.db.save_message(
                 user_id=db_user.id,
                 session_id=None,  # Session tracking not implemented yet
                 role=role,
-                content=content,
+                content=anonymized_content,  # Save anonymized version
                 content_hash=content_hash,
                 detected_emotions=detected_emotions,
                 emotional_intensity=emotional_intensity,
@@ -432,7 +456,8 @@ class StateManager:
                 guardrail_triggered=guardrail_triggered,
                 conversation_state=conversation_state,
             )
-            logger.debug("message_saved_to_db", user_id=user_id, role=role)
+            logger.debug("message_saved_to_db", user_id=user_id, role=role,
+                        pii_anonymized=bool(pii_stats))
 
         except Exception as e:
             logger.error("message_save_to_db_failed",
@@ -641,6 +666,11 @@ class StateManager:
             # Save user state to database
             await self.save_user_state(user_state)
 
+            # Check if we should suggest goal setting (after 3-5 messages)
+            goal_suggestion = await self._check_goal_setting_trigger(user_id, user_state)
+            if goal_suggestion:
+                safe_response += f"\n\n{goal_suggestion}"
+
             return safe_response
 
         except Exception as e:
@@ -772,8 +802,16 @@ class StateManager:
             "emotion_intensity": emotional_intensity,
             "language": "russian",
             "message_count": user_state.messages_count,
-            "user_state": user_state  # CRITICAL: Pass user_state for message history
+            "user_state": user_state,  # CRITICAL: Pass user_state for message history
+            "db": self.db,  # Add database manager for techniques that need persistence
+            "metrics_collector": self.metrics_collector  # Add metrics collector for conversion tracking
         }
+
+        # Record emotional state for analytics
+        await self.metrics_collector.record_emotional_state(
+            emotional_score=user_state.emotional_score,
+            distress_level=user_state.crisis_level
+        )
 
         # Map crisis_level to risk_level for orchestrator
         if user_state.crisis_level > 0.7:
@@ -843,7 +881,9 @@ class StateManager:
             "primary_emotion": state.get("primary_emotion", "neutral"),
             "distress_level": state.get("distress_level", "moderate"),
             "emotional_intensity": state.get("emotional_intensity", 0.5),
-            "user_state": state["user_state"]
+            "user_state": state["user_state"],
+            "db": self.db,  # Add database manager for techniques that need persistence
+            "metrics_collector": self.metrics_collector  # Add metrics collector for conversion tracking
         }
 
         # Apply the technique
@@ -1021,6 +1061,58 @@ class StateManager:
         except Exception as e:
             logger.error("knowledge_augmentation_failed", error=str(e))
             return base_response
+
+    async def _check_goal_setting_trigger(
+        self,
+        user_id: str,
+        user_state: UserState
+    ) -> Optional[str]:
+        """
+        Check if we should suggest goal setting to the user.
+
+        Triggers after 3-5 messages if user has no active goals.
+
+        Returns:
+            Goal suggestion text or None
+        """
+        # Only trigger between messages 3-5
+        if user_state.messages_count < 3 or user_state.messages_count > 5:
+            return None
+
+        # Check if already suggested in this session
+        if user_state.context.get("goal_suggested"):
+            return None
+
+        # Check if user already has active goals
+        if self.db:
+            try:
+                active_goals = await self.db.get_active_goals(user_id=user_state.user_id)
+                if active_goals:
+                    return None  # User already has goals
+            except Exception as e:
+                logger.warning("goal_check_failed", error=str(e))
+                # Continue even if check fails
+
+        # Mark as suggested
+        user_state.context["goal_suggested"] = True
+
+        # Return suggestion
+        suggestion = """---
+
+🎯 **Давайте поставим цель**
+
+Я замечу, что вы уже несколько раз обращались за поддержкой. Хотите ли вы поставить конкретную цель, над которой мы будем работать вместе?
+
+Это поможет вам:
+• Видеть прогресс
+• Чувствовать контроль
+• Двигаться к результату
+
+Чтобы начать, просто напишите: **"хочу поставить цель"** или используйте /goals"""
+
+        logger.info("goal_setting_triggered", user_id=user_id, message_count=user_state.messages_count)
+
+        return suggestion
 
     async def process_voice_message(self, user_id: str, audio_path: Path) -> str:
         """

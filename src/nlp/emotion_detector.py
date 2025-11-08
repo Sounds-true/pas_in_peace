@@ -1,10 +1,15 @@
 """Emotion detection using GoEmotions model."""
 
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from typing import Dict, List, Tuple, Optional, Any
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+
+try:
+    import torch
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
 
 from src.core.logger import get_logger
 from src.core.config import settings
@@ -38,18 +43,28 @@ class EmotionDetector:
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.model_name = settings.emotion_detection_model  # Russian GoEmotions model
 
-    async def initialize(self) -> None:
-        """Load emotion detection model."""
+    async def initialize(self, timeout: float = 30.0) -> bool:
+        """Load emotion detection model with timeout protection."""
+        if not TRANSFORMERS_AVAILABLE:
+            logger.warning("emotion_detector_dependencies_missing",
+                          message="transformers/torch not installed, will use keyword fallback")
+            return False
+
         try:
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                self.executor,
-                self._load_model
+            await asyncio.wait_for(
+                loop.run_in_executor(self.executor, self._load_model),
+                timeout=timeout
             )
             logger.info("emotion_detector_initialized", model=self.model_name)
+            return True
+        except asyncio.TimeoutError:
+            logger.warning("emotion_detector_init_timeout",
+                          message=f"Model loading timed out after {timeout}s, will use keyword fallback")
+            return False
         except Exception as e:
             logger.error("emotion_detector_init_failed", error=str(e))
-            raise
+            return False
 
     def _load_model(self) -> None:
         """Load model synchronously."""
