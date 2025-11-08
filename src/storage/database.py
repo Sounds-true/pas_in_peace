@@ -361,6 +361,38 @@ class DatabaseManager:
             result = await db_session.execute(stmt)
             return list(result.scalars().all())
 
+    async def get_letter_by_id(self, letter_id: int) -> Optional[Letter]:
+        """Get letter by ID."""
+        async with self.session() as db_session:
+            stmt = select(Letter).where(Letter.id == letter_id)
+            result = await db_session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def save_letter_draft(
+        self,
+        letter_id: int,
+        draft_content: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Save letter draft content and metadata."""
+        async with self.session() as db_session:
+            stmt = select(Letter).where(Letter.id == letter_id)
+            result = await db_session.execute(stmt)
+            letter = result.scalar_one_or_none()
+
+            if letter:
+                letter.draft_content = draft_content
+                letter.last_edited = datetime.utcnow()
+
+                # Update metadata if provided
+                if metadata:
+                    if "revision_history" in metadata:
+                        letter.revision_history = metadata["revision_history"]
+                    if "status" in metadata:
+                        letter.status = metadata["status"]
+
+                logger.info("letter_draft_saved", letter_id=letter_id)
+
     async def update_letter_metadata(
         self,
         letter_id: int,

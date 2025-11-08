@@ -21,7 +21,8 @@ from src.techniques import (
     CBTReframing,
     GroundingTechnique,
     ValidationTechnique,
-    ActiveListening
+    ActiveListening,
+    LetterWritingAssistant
 )
 from src.techniques.orchestrator import TechniqueOrchestrator
 from src.rag import KnowledgeRetriever, PAKnowledgeBase
@@ -97,7 +98,8 @@ class StateManager:
             "cbt": CBTReframing(),
             "grounding": GroundingTechnique(),
             "validation": ValidationTechnique(),
-            "active_listening": ActiveListening()
+            "active_listening": ActiveListening(),
+            "letter_writing": LetterWritingAssistant()
         }
 
         # Initialize orchestrator and other lightweight components
@@ -793,7 +795,8 @@ class StateManager:
             "emotion_intensity": emotional_intensity,
             "language": "russian",
             "message_count": user_state.messages_count,
-            "user_state": user_state  # CRITICAL: Pass user_state for message history
+            "user_state": user_state,  # CRITICAL: Pass user_state for message history
+            "db": self.db  # Add database manager for techniques that need persistence
         }
 
         # Map crisis_level to risk_level for orchestrator
@@ -864,7 +867,8 @@ class StateManager:
             "primary_emotion": state.get("primary_emotion", "neutral"),
             "distress_level": state.get("distress_level", "moderate"),
             "emotional_intensity": state.get("emotional_intensity", 0.5),
-            "user_state": state["user_state"]
+            "user_state": state["user_state"],
+            "db": self.db  # Add database manager for techniques that need persistence
         }
 
         # Apply the technique

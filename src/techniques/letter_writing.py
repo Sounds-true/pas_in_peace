@@ -443,6 +443,40 @@ _Редактирую письмо..._"""
         context: Dict[str, Any]
     ) -> TechniqueResult:
         """Handle finalizing stage - save and complete."""
+
+        # Save to database if available
+        db = context.get("db")
+        user_state = context.get("user_state")
+
+        if db and user_state:
+            try:
+                # Create or update letter in database
+                if letter_ctx.letter_id:
+                    # Update existing letter
+                    await db.save_letter_draft(
+                        letter_id=letter_ctx.letter_id,
+                        draft_content=letter_ctx.draft_content,
+                        metadata={"status": "completed"}
+                    )
+                    logger.info("letter_updated", letter_id=letter_ctx.letter_id)
+                else:
+                    # Create new letter
+                    letter = await db.create_letter(
+                        user_id=user_state.user_id,
+                        title=f"Письмо для {letter_ctx.recipient}",
+                        recipient_role=letter_ctx.recipient,
+                        purpose=letter_ctx.purpose,
+                        letter_type="parental_alienation",
+                        draft_content=letter_ctx.draft_content,
+                        communication_style=letter_ctx.tone,
+                        status="completed"
+                    )
+                    letter_ctx.letter_id = letter.id
+                    logger.info("letter_created", letter_id=letter.id)
+            except Exception as e:
+                logger.error("letter_save_failed", error=str(e))
+                # Continue even if save fails
+
         response = f"""✅ **Письмо готово!**
 
 **Кому:** {letter_ctx.recipient}
@@ -467,8 +501,6 @@ _Редактирую письмо..._"""
         # Mark as complete
         letter_ctx.current_stage = LetterStage.FINALIZING
 
-        # TODO: Save to database (will be implemented next)
-
         return TechniqueResult(
             success=True,
             response=response,
@@ -476,6 +508,7 @@ _Редактирую письмо..._"""
             metadata={
                 "stage": "finalized",
                 "recipient": letter_ctx.recipient,
-                "letter_completed": True
+                "letter_completed": True,
+                "letter_id": letter_ctx.letter_id
             }
         )

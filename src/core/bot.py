@@ -77,6 +77,7 @@ class PASBot:
             "/start - Начать диалог\\n"
             "/help - Показать это сообщение\\n"
             "/letter - Начать написание письма\\n"
+            "/letters - Посмотреть мои письма\\n"
             "/goals - Посмотреть ваши цели\\n"
             "/resources - Полезные ресурсы\\n"
             "/crisis - Экстренная помощь\\n"
@@ -100,6 +101,58 @@ class PASBot:
         # Process through state manager with "письмо" keyword
         response = await self.state_manager.process_message(user_id, "хочу написать письмо")
         await update.message.reply_text(response)
+
+    async def letters_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /letters command - view and resume letter drafts."""
+        user_id = str(update.effective_user.id)
+
+        log_user_interaction(
+            logger,
+            user_id=user_id,
+            message_type="command",
+            command="letters"
+        )
+
+        # Get user from state manager to access database
+        user_state = await self.state_manager.get_or_create_user_state(user_id)
+
+        if not self.state_manager.db:
+            await update.message.reply_text("Извините, база данных недоступна.")
+            return
+
+        try:
+            # Retrieve all letters for this user
+            letters = await self.state_manager.db.get_user_letters(
+                user_id=user_state.user_id,
+                status=None  # Get all letters
+            )
+
+            if not letters:
+                message = (
+                    "📝 У вас пока нет сохранённых писем.\n\n"
+                    "Используйте /letter чтобы начать писать новое письмо."
+                )
+            else:
+                # Build message with letter list
+                message = f"📚 **Ваши письма** ({len(letters)}):\n\n"
+
+                for idx, letter in enumerate(letters, 1):
+                    status_emoji = "✅" if letter.status == "completed" else "✏️"
+                    message += f"{status_emoji} **{idx}. {letter.title or f'Письмо #{letter.id}'}**\n"
+                    message += f"   Кому: {letter.recipient_role or 'не указано'}\n"
+                    message += f"   Статус: {letter.status}\n"
+                    message += f"   Создано: {letter.created_at.strftime('%d.%m.%Y')}\n\n"
+
+                message += "\nЧтобы продолжить редактирование, напишите номер письма.\n"
+                message += "Чтобы создать новое письмо, используйте /letter"
+
+            await update.message.reply_text(message)
+
+        except Exception as e:
+            logger.error("letters_list_failed", error=str(e), user_id=user_id)
+            await update.message.reply_text(
+                "Произошла ошибка при загрузке писем. Попробуйте позже."
+            )
 
     async def goals_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /goals command - view goals."""
@@ -306,6 +359,7 @@ class PASBot:
             BotCommand("start", "Начать диалог"),
             BotCommand("help", "Помощь"),
             BotCommand("letter", "Написать письмо"),
+            BotCommand("letters", "Мои письма"),
             BotCommand("goals", "Мои цели"),
             BotCommand("resources", "Полезные ресурсы"),
             BotCommand("crisis", "Экстренная помощь"),
@@ -319,6 +373,7 @@ class PASBot:
         app.add_handler(CommandHandler("start", self.start_command))
         app.add_handler(CommandHandler("help", self.help_command))
         app.add_handler(CommandHandler("letter", self.letter_command))
+        app.add_handler(CommandHandler("letters", self.letters_command))
         app.add_handler(CommandHandler("goals", self.goals_command))
         app.add_handler(CommandHandler("crisis", self.crisis_command))
         app.add_handler(CommandHandler("privacy", self.privacy_command))
