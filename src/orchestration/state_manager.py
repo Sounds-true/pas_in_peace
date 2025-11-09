@@ -25,7 +25,10 @@ from src.techniques import (
     LetterWritingAssistant,
     GoalTrackingAssistant
 )
+from src.techniques.quest_builder import QuestBuilderAssistant
 from src.techniques.orchestrator import TechniqueOrchestrator
+from src.orchestration.multi_track import MultiTrackManager
+from src.safety.content_moderator import ContentModerator
 from src.rag import KnowledgeRetriever, PAKnowledgeBase
 from src.monitoring import MetricsCollector
 from src.legal import LegalToolsHandler
@@ -101,7 +104,8 @@ class StateManager:
             "validation": ValidationTechnique(),
             "active_listening": ActiveListening(),
             "letter_writing": LetterWritingAssistant(),
-            "goal_tracking": GoalTrackingAssistant()
+            "goal_tracking": GoalTrackingAssistant(),
+            "quest_builder": None  # Initialized after db is ready
         }
 
         # Initialize orchestrator and other lightweight components
@@ -110,6 +114,10 @@ class StateManager:
         self.legal_tools = LegalToolsHandler()
         self.db = DatabaseManager()
         self.pii_protector = SimplePIIProtector()  # NEW: Simple PII protection
+
+        # Phase 4: Multi-track recovery system
+        self.multi_track_manager = None  # Initialized after db is ready
+        self.content_moderator = None  # Initialized after db is ready
 
         self.initialized = False
 
@@ -120,10 +128,22 @@ class StateManager:
             try:
                 await self.db.initialize()
                 logger.info("database_enabled")
+
+                # Initialize Phase 4 components (require database)
+                self.multi_track_manager = MultiTrackManager(db_manager=self.db)
+                self.content_moderator = ContentModerator()
+                self.techniques["quest_builder"] = QuestBuilderAssistant(
+                    db_manager=self.db,
+                    content_moderator=self.content_moderator
+                )
+                logger.info("phase4_components_enabled")
+
             except Exception as e:
                 logger.warning("database_disabled", reason=str(e))
                 # Continue without database - will use in-memory only
                 self.db = None
+                # Phase 4 components won't be available without database
+                logger.warning("phase4_components_disabled", reason="Database not available")
 
             # Try to initialize guardrails (optional for MVP)
             # TEMPORARILY DISABLED - Guardrails causes hanging during initialization
@@ -357,6 +377,15 @@ class StateManager:
         self.user_states[user_id] = UserState(user_id=user_id)
         logger.info("user_initialized_in_memory", user_id=user_id)
 
+        # Phase 4: Initialize recovery tracks for new user
+        if self.multi_track_manager and self.db:
+            try:
+                user_id_int = int(user_id) if user_id.isdigit() else hash(user_id) % 1000000
+                tracks = await self.multi_track_manager.initialize_tracks(user_id_int)
+                logger.info("recovery_tracks_initialized", user_id=user_id, tracks=list(tracks.keys()))
+            except Exception as e:
+                logger.warning("recovery_tracks_init_failed", user_id=user_id, error=str(e))
+
     async def get_user_state(self, user_id: str) -> Optional[UserState]:
         """Get user state, loading from database if not in cache."""
         # Check in-memory cache first
@@ -498,6 +527,12 @@ class StateManager:
         user_state.messages_count += 1
         user_state.message_history.append(HumanMessage(content=message))
 
+        # Phase 4: Detect recovery track from message (if multi-track enabled)
+        detected_track = None
+        if self.multi_track_manager:
+            detected_track = self.multi_track_manager.detect_track_from_message(message)
+            logger.debug("track_detected", user_id=user_id, track=detected_track)
+
         # Save user message to database
         await self.save_message_to_db(
             user_id=user_id,
@@ -618,6 +653,7 @@ class StateManager:
                 "intent": intent_result.intent if intent_result else None,
                 "intent_confidence": intent_result.confidence if intent_result else 0.0,
                 "extracted_context": extracted_context,
+                "detected_track": detected_track,  # Phase 4: Include detected track
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -665,6 +701,48 @@ class StateManager:
 
             # Save user state to database
             await self.save_user_state(user_state)
+
+            # Phase 4: Update multi-track progress (if technique was used)
+            if self.multi_track_manager and technique_used:
+                try:
+                    # Map technique to action type for cross-track impact
+                    action_type_map = {
+                        "quest_builder": "quest_created",
+                        "letter_writing": "letter_to_child",  # or letter_to_ex based on context
+                        "goal_tracking": "goal_set",
+                        "cbt": "first_cbt"
+                    }
+                    action_type = action_type_map.get(technique_used, technique_used)
+
+                    # Use detected track or fall back to primary track
+                    track_to_update = detected_track or user_state.context.get("primary_track", "self_work")
+
+                    # Update progress (5-10 points per technique)
+                    await self.multi_track_manager.update_progress(
+                        user_id=int(user_id) if user_id.isdigit() else hash(user_id) % 1000000,
+                        track=track_to_update,
+                        delta=5,
+                        action_type=action_type
+                    )
+
+                    # Check for milestone
+                    milestone = await self.multi_track_manager.check_milestone(
+                        user_id=int(user_id) if user_id.isdigit() else hash(user_id) % 1000000,
+                        track=track_to_update,
+                        action_type=action_type
+                    )
+                    if milestone:
+                        logger.info("milestone_achieved_in_session",
+                                  user_id=user_id,
+                                  milestone=milestone)
+                        # Could append milestone notification to response
+                        # safe_response += f"\n\n🏆 Milestone achieved: {milestone}"
+
+                except Exception as e:
+                    logger.warning("track_progress_update_failed",
+                                 user_id=user_id,
+                                 error=str(e))
+                    # Continue even if track update fails
 
             # Check if we should suggest goal setting (after 3-5 messages)
             goal_suggestion = await self._check_goal_setting_trigger(user_id, user_state)
@@ -804,7 +882,9 @@ class StateManager:
             "message_count": user_state.messages_count,
             "user_state": user_state,  # CRITICAL: Pass user_state for message history
             "db": self.db,  # Add database manager for techniques that need persistence
-            "metrics_collector": self.metrics_collector  # Add metrics collector for conversion tracking
+            "metrics_collector": self.metrics_collector,  # Add metrics collector for conversion tracking
+            "detected_track": state.get("detected_track"),  # Phase 4: Include detected track
+            "multi_track_manager": self.multi_track_manager  # Phase 4: Include track manager
         }
 
         # Record emotional state for analytics
@@ -883,7 +963,9 @@ class StateManager:
             "emotional_intensity": state.get("emotional_intensity", 0.5),
             "user_state": state["user_state"],
             "db": self.db,  # Add database manager for techniques that need persistence
-            "metrics_collector": self.metrics_collector  # Add metrics collector for conversion tracking
+            "metrics_collector": self.metrics_collector,  # Add metrics collector for conversion tracking
+            "detected_track": state.get("detected_track"),  # Phase 4: Include detected track
+            "multi_track_manager": self.multi_track_manager  # Phase 4: Include track manager
         }
 
         # Apply the technique
