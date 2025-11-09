@@ -76,6 +76,7 @@ class PASBot:
             "📚 Доступные команды:\\n\\n"
             "/start - Начать диалог\\n"
             "/help - Показать это сообщение\\n"
+            "/progress - Ваш прогресс по 4 направлениям\\n"
             "/letter - Начать написание письма\\n"
             "/letters - Посмотреть мои письма\\n"
             "/goals - Посмотреть ваши цели\\n"
@@ -219,6 +220,103 @@ class PASBot:
             logger.error("goals_list_failed", error=str(e), user_id=user_id)
             await update.message.reply_text(
                 "Произошла ошибка при загрузке целей. Попробуйте позже."
+            )
+
+    async def progress_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /progress command - view multi-track recovery progress."""
+        user_id = str(update.effective_user.id)
+
+        log_user_interaction(
+            logger,
+            user_id=user_id,
+            message_type="command",
+            command="progress"
+        )
+
+        if not self.state_manager.multi_track_manager or not self.state_manager.db:
+            await update.message.reply_text(
+                "Система отслеживания прогресса временно недоступна."
+            )
+            return
+
+        try:
+            # Convert user_id to int
+            user_id_int = int(user_id) if user_id.isdigit() else hash(user_id) % 1000000
+
+            # Get all track progress
+            tracks = await self.state_manager.multi_track_manager.get_all_progress(user_id_int)
+
+            if not tracks:
+                message = (
+                    "📊 **Ваш прогресс восстановления**\n\n"
+                    "Система мультитрекинга еще не инициализирована.\n"
+                    "Начните диалог, и я создам индивидуальный план восстановления."
+                )
+                await update.message.reply_text(message)
+                return
+
+            # Build progress report
+            message = "📊 **Ваш прогресс по 4 направлениям восстановления**\n\n"
+
+            # Track names in Russian
+            track_names = {
+                "self_work": "💚 Работа над собой",
+                "child_connection": "💙 Связь с ребенком",
+                "negotiation": "🤝 Переговоры",
+                "community": "👥 Сообщество"
+            }
+
+            # Phase names in Russian
+            phase_names = {
+                "awareness": "Осознание",
+                "expression": "Выражение",
+                "action": "Действие",
+                "mastery": "Мастерство"
+            }
+
+            for track_key, track_data in tracks.items():
+                percentage = track_data.get("completion_percentage", 0)
+                phase = track_data.get("phase", "awareness")
+                total_actions = track_data.get("total_actions", 0)
+
+                # Progress bar (10 blocks)
+                filled = int(percentage / 10)
+                progress_bar = "█" * filled + "░" * (10 - filled)
+
+                message += f"{track_names.get(track_key, track_key)}\n"
+                message += f"{progress_bar} {percentage}%\n"
+                message += f"Фаза: {phase_names.get(phase, phase)} | Действий: {total_actions}\n"
+
+                # Show next action
+                next_action = track_data.get("next_action", {})
+                if next_action.get("suggestion"):
+                    message += f"➡️ {next_action['suggestion'][:80]}\n"
+
+                # Show milestones if any
+                milestones = track_data.get("milestones", [])
+                if milestones:
+                    recent_milestone = milestones[-1]
+                    message += f"🏆 Последнее достижение: {recent_milestone.get('name', 'N/A')}\n"
+
+                message += "\n"
+
+            # Check if should suggest track switch
+            current_track = self.state_manager.multi_track_manager.get_primary_track(tracks)
+            suggested_switch = self.state_manager.multi_track_manager.should_suggest_track_switch(
+                current_track, tracks
+            )
+
+            if suggested_switch:
+                message += f"💡 **Рекомендация:** Попробуйте уделить внимание направлению \"{track_names.get(suggested_switch)}\" - оно требует развития.\n\n"
+
+            message += "📝 Используйте /help для просмотра доступных действий."
+
+            await update.message.reply_text(message)
+
+        except Exception as e:
+            logger.error("progress_display_failed", error=str(e), user_id=user_id)
+            await update.message.reply_text(
+                "Произошла ошибка при загрузке прогресса. Попробуйте позже."
             )
 
     async def crisis_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -410,6 +508,7 @@ class PASBot:
         commands = [
             BotCommand("start", "Начать диалог"),
             BotCommand("help", "Помощь"),
+            BotCommand("progress", "Прогресс восстановления"),
             BotCommand("letter", "Написать письмо"),
             BotCommand("letters", "Мои письма"),
             BotCommand("goals", "Мои цели"),
@@ -424,6 +523,7 @@ class PASBot:
         # Command handlers
         app.add_handler(CommandHandler("start", self.start_command))
         app.add_handler(CommandHandler("help", self.help_command))
+        app.add_handler(CommandHandler("progress", self.progress_command))
         app.add_handler(CommandHandler("letter", self.letter_command))
         app.add_handler(CommandHandler("letters", self.letters_command))
         app.add_handler(CommandHandler("goals", self.goals_command))

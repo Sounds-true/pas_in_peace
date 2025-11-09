@@ -36,6 +36,47 @@ class ConversationStateEnum(str, enum.Enum):
     END_SESSION = "end_session"
 
 
+class RecoveryTrackEnum(str, enum.Enum):
+    """Recovery track enumeration for multi-track system."""
+    SELF_WORK = "self_work"
+    CHILD_CONNECTION = "child_connection"
+    NEGOTIATION = "negotiation"
+    COMMUNITY = "community"
+
+
+class TrackPhaseEnum(str, enum.Enum):
+    """Track phase enumeration for recovery progress."""
+    AWARENESS = "awareness"      # 0-25%
+    EXPRESSION = "expression"    # 25-50%
+    ACTION = "action"           # 50-75%
+    MASTERY = "mastery"         # 75-100%
+
+
+class ProjectTypeEnum(str, enum.Enum):
+    """Creative project type enumeration."""
+    QUEST = "quest"
+    LETTER = "letter"
+    GOAL = "goal"
+
+
+class QuestStatusEnum(str, enum.Enum):
+    """Quest status enumeration."""
+    DRAFT = "draft"
+    IN_REVIEW = "in_review"
+    MODERATION_FAILED = "moderation_failed"
+    APPROVED = "approved"
+    DEPLOYED = "deployed"
+    ARCHIVED = "archived"
+
+
+class ModerationStatusEnum(str, enum.Enum):
+    """Content moderation status."""
+    PENDING = "pending"
+    PASSED = "passed"
+    FAILED = "failed"
+    NEEDS_REVIEW = "needs_review"
+
+
 class User(Base):
     """User model."""
 
@@ -68,11 +109,21 @@ class User(Base):
     consent_given = Column(Boolean, default=False)
     data_retention_days = Column(Integer, default=90)
 
+    # Multi-track recovery system (Phase 4)
+    recovery_tracks = Column(JSON, default=dict)  # Dict[RecoveryTrack, TrackProgress]
+    primary_track = Column(String(50), default="self_work")  # Current focus track
+    recovery_week = Column(Integer, default=0)  # Week since journey start
+    recovery_day = Column(Integer, default=0)  # Day in current week
+
     # Relationships
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
     goals = relationship("Goal", back_populates="user", cascade="all, delete-orphan")
     letters = relationship("Letter", back_populates="user", cascade="all, delete-orphan")
+    quests = relationship("Quest", back_populates="user", cascade="all, delete-orphan")
+    creative_projects = relationship("CreativeProject", back_populates="user", cascade="all, delete-orphan")
+    track_milestones = relationship("TrackMilestone", back_populates="user", cascade="all, delete-orphan")
+    psychological_profile = relationship("PsychologicalProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 class Session(Base):
@@ -187,6 +238,7 @@ class Goal(Base):
 
     # Relationships
     user = relationship("User", back_populates="goals")
+    creative_project = relationship("CreativeProject", back_populates="goal", uselist=False)
 
 
 class Letter(Base):
@@ -248,6 +300,7 @@ class Letter(Base):
 
     # Relationships
     user = relationship("User", back_populates="letters")
+    creative_project = relationship("CreativeProject", back_populates="letter", uselist=False)
 
 
 class MetricsSnapshot(Base):
@@ -305,3 +358,245 @@ class MetricsSnapshot(Base):
     peak_hour = Column(Integer)  # Hour of day with most activity (0-23)
     most_used_technique = Column(String(50))
     most_detected_emotion = Column(String(50))
+
+
+class Quest(Base):
+    """Quest model for educational quests created for children."""
+
+    __tablename__ = "quests"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Quest metadata
+    quest_id = Column(String(200), unique=True, nullable=False, index=True)
+    title = Column(String(300), nullable=False)
+    description = Column(Text)
+
+    # Child information
+    child_name = Column(String(100))
+    child_age = Column(Integer)
+    child_interests = Column(JSON, default=list)  # Topics, hobbies, favorite subjects
+
+    # Quest content
+    quest_yaml = Column(Text, nullable=False)  # Full YAML definition for inner_edu
+    total_nodes = Column(Integer, default=0)
+    difficulty_level = Column(String(20))  # easy/medium/hard
+
+    # Family memories and clues (for reveal mechanics)
+    family_photos = Column(JSON, default=list)  # Paths to photos
+    family_memories = Column(JSON, default=list)  # Memory descriptions
+    family_jokes = Column(JSON, default=list)  # Inside jokes, phrases
+    familiar_locations = Column(JSON, default=list)  # Places child recognizes
+
+    # Status tracking
+    status = Column(Enum(QuestStatusEnum), default=QuestStatusEnum.DRAFT)
+    moderation_status = Column(Enum(ModerationStatusEnum), default=ModerationStatusEnum.PENDING)
+    moderation_issues = Column(JSON, default=list)  # Toxic content found, patterns flagged
+    moderation_notes = Column(Text)
+
+    # Reveal mechanics configuration
+    reveal_enabled = Column(Boolean, default=True)
+    reveal_threshold_percentage = Column(Float, default=0.8)  # When to show reveal (80%)
+    reveal_message = Column(Text)  # Final message from parent
+
+    # Deployment
+    deployed_to_inner_edu = Column(Boolean, default=False)
+    inner_edu_quest_id = Column(String(200), index=True)  # ID in inner_edu system
+    deployed_at = Column(DateTime)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_edited = Column(DateTime, onupdate=datetime.utcnow)
+    approved_at = Column(DateTime)
+
+    # Relationships
+    user = relationship("User", back_populates="quests")
+    quest_analytics = relationship("QuestAnalytics", back_populates="quest", uselist=False, cascade="all, delete-orphan")
+    privacy_settings = relationship("ChildPrivacySettings", back_populates="quest", uselist=False, cascade="all, delete-orphan")
+    creative_project = relationship("CreativeProject", back_populates="quest", uselist=False)
+
+
+class CreativeProject(Base):
+    """Meta-table linking all creative projects (quests, letters, goals)."""
+
+    __tablename__ = "creative_projects"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Project type and reference
+    project_type = Column(Enum(ProjectTypeEnum), nullable=False)
+    quest_id = Column(Integer, ForeignKey("quests.id"), unique=True)
+    letter_id = Column(Integer, ForeignKey("letters.id"), unique=True)
+    goal_id = Column(Integer, ForeignKey("goals.id"), unique=True)
+
+    # Status
+    status = Column(String(20), default="active")  # active/completed/abandoned
+    progress_percentage = Column(Float, default=0.0)
+
+    # Multi-track impact
+    affects_tracks = Column(JSON, default=list)  # List[RecoveryTrack] that this project impacts
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime)
+    last_activity = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="creative_projects")
+    quest = relationship("Quest", back_populates="creative_project")
+    letter = relationship("Letter", back_populates="creative_project")
+    goal = relationship("Goal", back_populates="creative_project")
+
+
+class QuestAnalytics(Base):
+    """Aggregated analytics for quest progress (privacy-safe, child consent required)."""
+
+    __tablename__ = "quest_analytics"
+
+    id = Column(Integer, primary_key=True)
+    quest_id = Column(Integer, ForeignKey("quests.id"), unique=True, nullable=False)
+
+    # Progress tracking (aggregated only, NO personal messages/answers)
+    nodes_completed = Column(Integer, default=0)
+    total_nodes = Column(Integer, default=0)
+    completion_percentage = Column(Float, default=0.0)
+
+    # Educational progress (aggregated metrics only)
+    educational_progress = Column(JSON, default=dict)  # {"math": 75, "logic": 60, ...}
+    achievements_unlocked = Column(JSON, default=list)  # Achievement IDs only
+    difficulty_progression = Column(JSON, default=dict)  # Trend over time
+
+    # Engagement metrics
+    play_count = Column(Integer, default=0)
+    last_played = Column(DateTime, index=True)
+    total_time_spent_minutes = Column(Float, default=0.0)
+    average_session_minutes = Column(Float, default=0.0)
+
+    # Reveal progress
+    clues_discovered = Column(Integer, default=0)
+    total_clues = Column(Integer, default=0)
+    reveal_phase = Column(String(50))  # NEUTRAL/SUBTLE_CLUES/INVESTIGATION/REVEAL
+    reveal_completed = Column(Boolean, default=False)
+    reveal_completed_at = Column(DateTime)
+
+    # Child privacy consent
+    child_consented_to_sharing = Column(Boolean, default=False)
+    consent_updated_at = Column(DateTime)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    quest = relationship("Quest", back_populates="quest_analytics")
+
+
+class ChildPrivacySettings(Base):
+    """Child privacy settings for quest data sharing (consent management)."""
+
+    __tablename__ = "child_privacy_settings"
+
+    id = Column(Integer, primary_key=True)
+    quest_id = Column(Integer, ForeignKey("quests.id"), unique=True, nullable=False)
+
+    # Consent levels (default: all disabled)
+    share_completion_progress = Column(Boolean, default=False)  # Share % completed
+    share_educational_progress = Column(Boolean, default=False)  # Share subject scores
+    share_achievements = Column(Boolean, default=False)  # Share unlocked achievements
+    share_play_frequency = Column(Boolean, default=False)  # Share last played, session count
+
+    # Notification preferences
+    notify_both_parents = Column(Boolean, default=True)  # Send to both or only creator
+    notification_frequency = Column(String(20), default="immediate")  # immediate/daily/weekly
+
+    # Audit trail
+    consent_given_by_child = Column(Boolean, default=False)
+    consent_timestamp = Column(DateTime)
+    consent_revoked_at = Column(DateTime)
+    consent_history = Column(JSON, default=list)  # Audit log of changes
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    quest = relationship("Quest", back_populates="privacy_settings")
+
+
+class PsychologicalProfile(Base):
+    """Unified psychological profile for parent (aggregated from all interactions)."""
+
+    __tablename__ = "psychological_profiles"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+
+    # Emotional trends (aggregated from sessions/messages)
+    emotional_trends = Column(JSON, default=dict)  # {"sadness": [0.6, 0.5, 0.4], "anger": [...]}
+    emotional_baseline = Column(Float, default=0.5)  # Average emotional score
+    emotional_volatility = Column(Float, default=0.0)  # Standard deviation
+
+    # Crisis history
+    crisis_history = Column(JSON, default=list)  # Timestamps and context of crisis incidents
+    last_crisis_date = Column(DateTime)
+    crisis_frequency = Column(Float, default=0.0)  # Incidents per week
+
+    # Coping strategies (what works for this user)
+    coping_strategies = Column(JSON, default=dict)  # {"grounding": 0.8, "cbt": 0.6, ...}
+    most_effective_technique = Column(String(50))
+
+    # Triggers and patterns
+    triggers = Column(JSON, default=list)  # Known emotional triggers
+    distress_patterns = Column(JSON, default=dict)  # Time of day, day of week patterns
+
+    # Communication style
+    communication_style = Column(String(50))  # Direct/indirect/emotional/logical
+    preferred_tone = Column(String(50))  # Empathetic/practical/both
+
+    # Content quality tracking
+    toxic_patterns = Column(JSON, default=list)  # Patterns of toxic communication
+    toxicity_trend = Column(String(20))  # improving/stable/worsening
+    last_toxicity_incident = Column(DateTime)
+
+    # Growth areas
+    growth_areas = Column(JSON, default=list)  # Focus areas for development
+    progress_notes = Column(Text)
+
+    # Recommendations
+    recommended_techniques = Column(JSON, default=list)  # Personalized technique suggestions
+    recommended_resources = Column(JSON, default=list)  # External resources
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="psychological_profile")
+
+
+class TrackMilestone(Base):
+    """Recovery track milestone achievements."""
+
+    __tablename__ = "track_milestones"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Milestone details
+    track = Column(String(50), nullable=False, index=True)  # RecoveryTrack enum value
+    milestone_type = Column(String(100), nullable=False)  # first_letter/quest_created/goal_achieved/etc
+    milestone_name = Column(String(200))
+    description = Column(Text)
+
+    # Achievement context
+    achievement_context = Column(JSON, default=dict)  # Additional metadata
+    related_project_id = Column(Integer)  # Reference to CreativeProject
+    related_project_type = Column(String(20))  # quest/letter/goal
+
+    # Timestamps
+    achieved_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="track_milestones")
