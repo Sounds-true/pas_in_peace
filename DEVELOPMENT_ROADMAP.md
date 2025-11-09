@@ -744,28 +744,226 @@ async def initialize(self, timeout: float = 15.0) -> bool:
 
 ---
 
-### Phase 4: Advanced Features (4+ weeks) 🟢
+### Phase 4: Unified Integration with Inner Edu (12 weeks) 🔵
 
-#### Personalization
-- [ ] Track user preferences (communication style, topics)
-- [ ] Adapt prompts based on user history
-- [ ] Suggest techniques based on past effectiveness
+**Status**: ⏳ Planning Complete - Ready for Implementation
+**Documentation**: `docs/backlog/current/10-FEAT-unified-integration/impl/`
 
-#### Multi-language Support
-- [ ] English translation of prompts
-- [ ] Language detection
-- [ ] Bilingual support (RU/EN)
+#### Overview
 
-#### Advanced Therapy Techniques
-- [ ] Expand IFS Parts Work usage
-- [ ] Add CBT exercises
-- [ ] Implement guided meditations
-- [ ] Add journaling prompts
+Объединение проектов **pas_in_peace** (Telegram-бот для отчужденных родителей) и **inner_edu** (образовательная платформа для детей) в единую экосистему семейного исцеления.
+
+**Ключевые цели**:
+1. Unified Web Interface для управления всеми аспектами recovery
+2. Multi-Track Recovery System (4 параллельных трека с визуализацией)
+3. Quest Builder с conversational AI для создания персонализированных квестов
+4. "Trojan Horse" Reveal Mechanics (ребенок постепенно открывает создателя)
+5. Privacy-First Architecture (child consent, neutral reporting обоим родителям)
+6. Shared Database Layer (PostgreSQL для обоих проектов)
+
+**Implementation Plans**:
+- ✅ [IP-00-index.md](docs/backlog/current/10-FEAT-unified-integration/impl/IP-00-index.md) - Master index
+- ✅ [IP-01-master-architecture.md](docs/backlog/current/10-FEAT-unified-integration/impl/IP-01-master-architecture.md) - Overall architecture
+- ✅ [IP-02-web-interface.md](docs/backlog/current/10-FEAT-unified-integration/impl/IP-02-web-interface.md) - Frontend dashboard
+- ✅ [IP-03-quest-builder-assistant.md](docs/backlog/current/10-FEAT-unified-integration/impl/IP-03-quest-builder-assistant.md) - Conversational AI
+- ✅ [IP-04-database-shared-layer.md](docs/backlog/current/10-FEAT-unified-integration/impl/IP-04-database-shared-layer.md) - PostgreSQL schema
+- ✅ [IP-05-multi-track-system.md](docs/backlog/current/10-FEAT-unified-integration/impl/IP-05-multi-track-system.md) - 4 recovery tracks
+- ✅ [IP-06-reveal-achievement-system.md](docs/backlog/current/10-FEAT-unified-integration/impl/IP-06-reveal-achievement-system.md) - Reveal & sharing
+
+---
+
+#### Subphase 4.1: Foundation (Weeks 1-2)
+
+**IP-04: Database Shared Layer**
+- [ ] Create 6 new models (Quest, CreativeProject, QuestAnalytics, ChildPrivacySettings, PsychologicalProfile)
+- [ ] Extend User model with recovery_tracks, primary_track fields
+- [ ] Create Alembic migrations
+- [ ] Implement DatabaseManager methods (CRUD + privacy checks)
+- [ ] Add foreign key constraints and indexes
+- [ ] Unit tests for all database operations
+
+**IP-01: Architecture Setup**
+- [ ] Setup API Gateway
+- [ ] Configure Telegram OAuth
+- [ ] Setup shared PostgreSQL connection
+- [ ] Configure CORS for cross-project communication
 
 **Success Criteria**:
-- [ ] Responses are personalized to user
-- [ ] English-speaking users supported
-- [ ] Variety of techniques actively used
+- [ ] All database migrations applied without errors
+- [ ] Foreign keys and indexes working
+- [ ] Privacy enforcement layer tested
+- [ ] CRUD operations work for all new models
+
+---
+
+#### Subphase 4.2: Backend Core (Weeks 3-5)
+
+**IP-05: Multi-Track Recovery System**
+- [ ] Create MultiTrackManager class
+- [ ] Implement RecoveryTrack and TrackPhase enums
+- [ ] Integrate with existing StateManager
+- [ ] Add intent detection (message → track mapping)
+- [ ] Implement track switching logic
+- [ ] Create `/progress` Telegram command
+- [ ] Add `/api/tracks/*` endpoints for web interface
+- [ ] AI-powered next action suggestions (GPT-4)
+
+**IP-03: Quest Builder Assistant**
+- [ ] Create QuestBuilderAssistant technique class
+- [ ] Implement 6-stage state machine (INITIAL → GATHERING → GENERATING → REVIEWING → MODERATING → FINALIZING)
+- [ ] Create ContentModerator for safety
+- [ ] Integrate GPT-4 for YAML generation
+- [ ] Implement WebSocket endpoints for real-time dialogue
+- [ ] Create YAML export logic for inner_edu
+- [ ] Add retry logic for AI generation failures
+
+**Success Criteria**:
+- [ ] All 4 recovery tracks show progress correctly
+- [ ] Track switching works seamlessly
+- [ ] Quest Builder dialogue completes successfully (>90% of attempts)
+- [ ] Content moderation blocks toxic content (>95% accuracy)
+- [ ] YAML generation produces valid output
+
+---
+
+#### Subphase 4.3: Frontend Integration (Weeks 6-8)
+
+**IP-02: Unified Web Interface**
+- [ ] Create ParentDashboard page in inner_edu frontend
+- [ ] Build UnifiedDashboard layout component
+- [ ] Implement MultiTrackProgress visualization (4 track cards)
+- [ ] Create CreativeProjects grid component
+- [ ] Build LetterManager UI
+- [ ] Integrate AIQuestBuilder (existing) with new backend
+- [ ] Create Analytics dashboard (EmotionalTrends, ChildProgress charts)
+- [ ] Setup Zustand stores and React Query
+- [ ] Create pasBot.ts API client
+- [ ] Implement WebSocket client for quest creation
+- [ ] Add responsive design (desktop + tablet)
+
+**Success Criteria**:
+- [ ] Dashboard loads in <3s
+- [ ] All 4 tracks display with correct progress
+- [ ] Can create new projects (quests, letters, goals) via UI
+- [ ] WebSocket dialogue works in real-time
+- [ ] Moderation warnings show inline
+- [ ] UI responsive on tablets (768px+)
+
+---
+
+#### Subphase 4.4: Advanced Features (Weeks 9-11)
+
+**IP-06: Reveal & Achievement System**
+- [ ] Implement RevealEngine (4 phases: NEUTRAL → SUBTLE_CLUES → INVESTIGATION → REVEAL)
+- [ ] Create ClueGenerator logic
+- [ ] Build RevealMechanics, ClueDetector, DetectiveLog (React components)
+- [ ] Implement AchievementSystem with child consent
+- [ ] Create ShareConsent component (privacy UI)
+- [ ] Build AchievementNotifier (dual parent notifications)
+- [ ] Implement ConsentManager
+- [ ] Add ChildPrivacySettings enforcement
+- [ ] Create neutral message composer
+- [ ] Integrate Telegram Bot API for notifications
+
+**Success Criteria**:
+- [ ] Quest starts as neutral educational app (no family references)
+- [ ] Clues appear progressively (30%, 60%, 80% milestones)
+- [ ] Reveal node shows only after 80% completion
+- [ ] Achievement sharing requires child consent
+- [ ] Both parents receive identical neutral notifications
+- [ ] Child can revoke consent anytime
+- [ ] Privacy enforcement tested with various scenarios
+
+---
+
+#### Subphase 4.5: Integration & Polish (Week 12)
+
+**Testing & Quality Assurance**
+- [ ] End-to-end test: full quest creation flow
+- [ ] Test: child plays quest and discovers reveal
+- [ ] Test: achievement sharing with consent variations
+- [ ] Test: multi-track progress updates
+- [ ] Test: concurrent access (PAS + Inner Edu)
+- [ ] Performance testing (API response times, database queries)
+- [ ] Security audit (privacy enforcement, PII protection)
+
+**Documentation**
+- [ ] API documentation (OpenAPI spec)
+- [ ] User guide for web interface
+- [ ] Admin guide for content moderation
+- [ ] Migration guide for existing users
+- [ ] ER diagram for database schema
+
+**Deployment**
+- [ ] Setup feature flags
+- [ ] Configure staging environment
+- [ ] Alpha testing with 10 internal users
+- [ ] Beta rollout to 50 early adopters
+- [ ] Production deployment (gradual 10% → 50% → 100%)
+
+**Success Criteria**:
+- [ ] All E2E tests passing
+- [ ] No critical security vulnerabilities
+- [ ] API response times <2s (95th percentile)
+- [ ] Dashboard load time <3s
+- [ ] Quest generation success rate >90%
+- [ ] Zero privacy leaks detected
+- [ ] Documentation complete and reviewed
+
+---
+
+#### Phase 4 Summary
+
+**Total Estimated Effort**: 12 weeks full-time development
+
+**Backend Work**:
+- 6 new Python classes (~2500 lines)
+- 6 new database models + migrations
+- 15+ new API endpoints
+- WebSocket implementation
+- ~1000 lines unit tests
+
+**Frontend Work**:
+- 1 new page + 20+ React components (~3000 lines)
+- State management setup (Zustand + React Query)
+- WebSocket client integration
+- Charts and visualization
+- ~500 lines integration tests
+
+**Key Deliverables**:
+1. ✅ 6 detailed implementation plans (IP-01 through IP-06)
+2. Unified web interface for all recovery activities
+3. Multi-track progress visualization system
+4. Conversational AI quest builder
+5. Progressive reveal mechanics for child engagement
+6. Privacy-first achievement sharing
+7. Shared database architecture
+8. Comprehensive testing suite
+9. Full documentation
+
+**Critical Requirements**:
+- Child consent required for all data sharing (default: NO_SHARING)
+- Aggregated data only (NO personal messages)
+- Content moderation on every step
+- Dual parent notifications (identical, neutral messages)
+- Graceful degradation if OpenAI unavailable
+- Performance: <3s dashboard load, <2s API responses
+
+**Feature Flags**:
+- `unified_web_interface_enabled`
+- `multi_track_system_enabled`
+- `quest_builder_enabled`
+- `reveal_mechanics_enabled`
+- `achievement_sharing_enabled`
+- `dual_parent_notifications`
+- `strict_moderation`
+
+**Top Risks & Mitigations**:
+1. **OpenAI API limits/costs** → Caching, template fallbacks, budget monitoring
+2. **Custodial parent discovers & blocks** → Neutral branding, educational focus
+3. **Child feels manipulated** → Gentle reveal, emphasis on education
+4. **Privacy leak** → Strict privacy layer, audit logging, aggregated data only
+5. **User confusion** → Simple onboarding, progressive disclosure, clear UI
 
 ---
 
@@ -910,11 +1108,16 @@ MIT License (see LICENSE file)
 
 ---
 
-**Last Updated**: 2025-11-08
+**Last Updated**: 2025-11-09
 **Version**: 0.3.0 (Enhanced MVP with ML modules)
-**Status**: Active Development
+**Status**: Active Development - Phase 4 Planning Complete
 
 **Recent Progress**:
 - ✅ Phase 1: Critical bugs fixed (message persistence, PII protection)
 - ✅ Phase 2: Feature enhancements complete (Letter Writing, Goal Tracking, Metrics)
 - ✅ Phase 3: ML modules fixed and enabled (Entity Extractor, Knowledge Retriever, Emotion Detector)
+- ✅ Phase 4: Planning complete - 6 detailed implementation plans created for Unified Integration
+
+**Next Steps**:
+- Begin Phase 4.1: Foundation (Database Shared Layer + Architecture Setup)
+- See `docs/backlog/current/10-FEAT-unified-integration/impl/IP-00-index.md` for detailed roadmap
