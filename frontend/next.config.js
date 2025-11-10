@@ -25,11 +25,7 @@ const nextConfig = {
     return config;
   },
 
-  // Experimental features
-  experimental: {
-    // Enable app directory
-    appDir: false, // Using pages for now
-  },
+  // Experimental features (removed deprecated appDir option)
 };
 
 module.exports = nextConfig;

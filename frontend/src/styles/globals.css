@@ -19,7 +19,7 @@
   }
 
   * {
-    @apply border-border;
+    @apply border-white/20;
   }
 
   body {
