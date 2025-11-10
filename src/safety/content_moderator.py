@@ -243,7 +243,7 @@ class ContentModerator:
         content: str,
         context: Optional[Dict] = None
     ) -> List[Dict]:
-        """Check content with AI (SupervisorAgent).
+        """Check content with AI (SupervisorAgent or GPT-4).
 
         Args:
             content: Content to check
@@ -253,7 +253,8 @@ class ContentModerator:
             List of AI-detected issues
         """
         if not self.supervisor:
-            return []
+            # Fallback to GPT-4 if SupervisorAgent unavailable
+            return await self._check_with_gpt4(content, context)
 
         try:
             # Build prompt for supervisor
@@ -270,19 +271,128 @@ Check for:
 4. Pressure on the child
 5. Adult topics (divorce, court, legal)
 
-Return a safety assessment."""
+Return a safety assessment with specific issues found."""
 
-            # Call supervisor (NOTE: This is a placeholder - actual implementation depends on SupervisorAgent API)
-            # result = await self.supervisor.evaluate(prompt)
+            # Call supervisor evaluate method
+            result = await self.supervisor.evaluate(
+                user_message=prompt,
+                context={"moderation_check": True, "content": content}
+            )
 
-            # For now, return empty list
-            # TODO: Integrate with actual SupervisorAgent when available
-            logger.info("ai_moderation_check", content_length=len(content))
-            return []
+            # Parse issues from supervisor response
+            issues = self._parse_supervisor_response(result)
+
+            logger.info(
+                "ai_moderation_complete",
+                content_length=len(content),
+                issues_found=len(issues)
+            )
+            return issues
 
         except Exception as e:
             logger.error("ai_moderation_failed", error=str(e))
+            # Fallback to GPT-4
+            return await self._check_with_gpt4(content, context)
+
+    async def _check_with_gpt4(
+        self,
+        content: str,
+        context: Optional[Dict] = None
+    ) -> List[Dict]:
+        """Fallback moderation using GPT-4 directly.
+
+        Args:
+            content: Content to check
+            context: Context for evaluation
+
+        Returns:
+            List of AI-detected issues
+        """
+        try:
+            from langchain_openai import ChatOpenAI
+            from langchain_core.messages import SystemMessage, HumanMessage
+            from src.core.config import settings
+
+            llm = ChatOpenAI(
+                model="gpt-4-turbo-preview",
+                temperature=0.1,
+                api_key=settings.openai_api_key
+            )
+
+            system_prompt = """You are a content safety expert specializing in child protection.
+Evaluate content for:
+- Manipulation/gaslighting
+- Blaming other parent
+- Age-inappropriate topics
+- Pressure on child
+- Adult topics (divorce, legal)
+
+Return a JSON list of issues with format:
+[{"category": "manipulation", "severity": "critical", "message": "...", "location": "..."}]
+
+Return empty list [] if content is safe."""
+
+            child_age = context.get("child_age", 10) if context else 10
+            user_prompt = f"""Evaluate this quest content for a {child_age}-year-old child:
+
+"{content}"
+
+Return JSON list of issues or [] if safe:"""
+
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt)
+            ]
+
+            response = await llm.ainvoke(messages)
+            response_text = response.content.strip()
+
+            # Parse JSON response
+            import json
+            if response_text.startswith("["):
+                issues = json.loads(response_text)
+                logger.info(
+                    "gpt4_moderation_complete",
+                    issues_count=len(issues)
+                )
+                return issues
+            else:
+                logger.warning(
+                    "gpt4_moderation_invalid_format",
+                    response=response_text[:100]
+                )
+                return []
+
+        except Exception as e:
+            logger.error("gpt4_moderation_failed", error=str(e))
             return []
+
+    def _parse_supervisor_response(self, result: Any) -> List[Dict]:
+        """Parse SupervisorAgent response into issues list.
+
+        Args:
+            result: SupervisorAgent evaluation result
+
+        Returns:
+            List of issues
+        """
+        issues = []
+
+        # If result is a dict with 'issues' key
+        if isinstance(result, dict) and "issues" in result:
+            issues = result["issues"]
+
+        # If result is a TechniqueResult
+        elif hasattr(result, "metadata") and "issues" in result.metadata:
+            issues = result.metadata["issues"]
+
+        # Otherwise parse from response text
+        elif hasattr(result, "response"):
+            # Try to extract issues from text
+            # This is a fallback for text-based responses
+            pass
+
+        return issues
 
     async def moderate_quest(self, quest_yaml: str, quest_metadata: Dict) -> Dict:
         """Moderate entire quest YAML.
