@@ -1,0 +1,161 @@
+/**
+ * useProjects - Projects (Quests, Letters, Goals) hooks
+ */
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '../api/client';
+import { useProjectsStore } from '../stores/projectsStore';
+import type { Project, ProjectType, ProjectStatus } from '../types';
+
+/**
+ * Get all projects
+ */
+export function useProjects(filters?: {
+  type?: ProjectType;
+  status?: ProjectStatus;
+}) {
+  const { setProjects, setLoading } = useProjectsStore();
+
+  return useQuery({
+    queryKey: ['projects', filters],
+    queryFn: async () => {
+      const projects = await apiClient.getProjects(filters);
+      setProjects(projects);
+      return projects;
+    },
+    staleTime: 1 * 60 * 1000, // 1 minute
+    onSuccess: (projects) => {
+      setProjects(projects);
+      setLoading(false);
+    },
+  });
+}
+
+/**
+ * Get single project
+ */
+export function useProject(projectId: string) {
+  return useQuery({
+    queryKey: ['projects', projectId],
+    queryFn: () => apiClient.getProject(projectId),
+    enabled: !!projectId,
+  });
+}
+
+/**
+ * Create project
+ */
+export function useCreateProject() {
+  const queryClient = useQueryClient();
+  const { addProject } = useProjectsStore();
+
+  return useMutation({
+    mutationFn: (data: Parameters<typeof apiClient.createProject>[0]) =>
+      apiClient.createProject(data),
+    onSuccess: (newProject) => {
+      addProject(newProject);
+      queryClient.invalidateQueries(['projects']);
+    },
+  });
+}
+
+/**
+ * Update project
+ */
+export function useUpdateProject() {
+  const queryClient = useQueryClient();
+  const { updateProject } = useProjectsStore();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      changes,
+    }: {
+      id: string;
+      changes: Partial<Project>;
+    }) => apiClient.updateProject(id, changes),
+    onSuccess: (updatedProject) => {
+      updateProject(updatedProject.id, updatedProject);
+      queryClient.invalidateQueries(['projects']);
+      queryClient.invalidateQueries(['projects', updatedProject.id]);
+    },
+  });
+}
+
+/**
+ * Delete project
+ */
+export function useDeleteProject() {
+  const queryClient = useQueryClient();
+  const { removeProject } = useProjectsStore();
+
+  return useMutation({
+    mutationFn: (projectId: string) => apiClient.deleteProject(projectId),
+    onSuccess: (_, projectId) => {
+      removeProject(projectId);
+      queryClient.invalidateQueries(['projects']);
+    },
+  });
+}
+
+// ========== Quests ==========
+
+/**
+ * Get all quests
+ */
+export function useQuests() {
+  return useQuery({
+    queryKey: ['quests'],
+    queryFn: () => apiClient.getQuests(),
+    staleTime: 1 * 60 * 1000,
+  });
+}
+
+/**
+ * Get single quest
+ */
+export function useQuest(questId: string) {
+  return useQuery({
+    queryKey: ['quests', questId],
+    queryFn: () => apiClient.getQuest(questId),
+    enabled: !!questId,
+  });
+}
+
+/**
+ * Create quest
+ */
+export function useCreateQuest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: Parameters<typeof apiClient.createQuest>[0]) =>
+      apiClient.createQuest(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['quests']);
+      queryClient.invalidateQueries(['projects']);
+    },
+  });
+}
+
+/**
+ * Update quest
+ */
+export function useUpdateQuest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      changes,
+    }: {
+      id: string;
+      changes: Parameters<typeof apiClient.updateQuest>[1];
+    }) => apiClient.updateQuest(id, changes),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries(['quests']);
+      queryClient.invalidateQueries(['quests', variables.id]);
+      queryClient.invalidateQueries(['projects']);
+    },
+  });
+}
