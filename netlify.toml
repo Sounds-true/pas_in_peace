@@ -1,0 +1,28 @@
+# Netlify Configuration for PAS in Peace Frontend
+
+[build]
+  # Base directory for the build
+  base = "frontend"
+
+  # Build command
+  command = "npm run build"
+
+  # Output directory
+  publish = ".next"
+
+[build.environment]
+  # Node version
+  NODE_VERSION = "18"
+
+  # Next.js specific
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# Ignore Python backend files
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Environment variables (set in Netlify UI)
+# NEXT_PUBLIC_API_URL
+# NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
+# NEXT_PUBLIC_QUEST_BUILDER_ENABLED
+# NEXT_PUBLIC_ANALYTICS_ENABLED
