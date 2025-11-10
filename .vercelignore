@@ -1,0 +1,27 @@
+# Vercel ignore - don't upload these
+.git/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.md
+!README.md
+docs/
+tests/
+src/
+dna/
+alembic/
+*.py
+requirements.txt
+Dockerfile
+docker-compose.yml
+.env
+.env.*
+!frontend/.env.production
+
+# Keep only frontend
+!frontend/
