@@ -36,7 +36,7 @@ function SettingsContent() {
   const [settings, setSettings] = useState({
     // Profile
     firstName: user?.first_name || '',
-    lastName: user?.last_name || '',
+    lastName: '', // last_name not in User type
     username: user?.username || '',
     email: '',
     phone: '',

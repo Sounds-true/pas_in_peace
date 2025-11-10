@@ -29,7 +29,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user } = useUserStore();
-  const { mutate: logout, isLoading: isLoggingOut } = useLogout();
+  const { mutate: logout, isPending: isLoggingOut } = useLogout();
   const router = useRouter();
 
   const handleLogout = () => {
