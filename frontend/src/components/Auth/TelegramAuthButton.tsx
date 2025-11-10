@@ -45,7 +45,7 @@ export const TelegramAuthButton: React.FC<TelegramAuthButtonProps> = ({
   className = '',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { mutate: login, isLoading } = useTelegramLogin();
+  const { mutate: login, isPending } = useTelegramLogin();
 
   useEffect(() => {
     // Callback function that Telegram widget will call
@@ -99,7 +99,7 @@ export const TelegramAuthButton: React.FC<TelegramAuthButtonProps> = ({
       />
 
       {/* Loading overlay */}
-      {isLoading && (
+      {isPending && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur rounded-2xl">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full animate-spin" />

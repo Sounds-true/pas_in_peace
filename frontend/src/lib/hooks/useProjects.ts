@@ -2,6 +2,7 @@
  * useProjects - Projects (Quests, Letters, Goals) hooks
  */
 
+import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -16,19 +17,24 @@ export function useProjects(filters?: {
 }) {
   const { setProjects, setLoading } = useProjectsStore();
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['projects', filters],
     queryFn: async () => {
       const projects = await apiClient.getProjects(filters);
-      setProjects(projects);
       return projects;
     },
     staleTime: 1 * 60 * 1000, // 1 minute
-    onSuccess: (projects) => {
-      setProjects(projects);
-      setLoading(false);
-    },
   });
+
+  // Handle side effects with useEffect
+  React.useEffect(() => {
+    if (query.data) {
+      setProjects(query.data);
+      setLoading(false);
+    }
+  }, [query.data, setProjects, setLoading]);
+
+  return query;
 }
 
 /**
@@ -54,7 +60,7 @@ export function useCreateProject() {
       apiClient.createProject(data),
     onSuccess: (newProject) => {
       addProject(newProject);
-      queryClient.invalidateQueries(['projects']);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }
@@ -76,8 +82,8 @@ export function useUpdateProject() {
     }) => apiClient.updateProject(id, changes),
     onSuccess: (updatedProject) => {
       updateProject(updatedProject.id, updatedProject);
-      queryClient.invalidateQueries(['projects']);
-      queryClient.invalidateQueries(['projects', updatedProject.id]);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects', updatedProject.id] });
     },
   });
 }
@@ -93,7 +99,7 @@ export function useDeleteProject() {
     mutationFn: (projectId: string) => apiClient.deleteProject(projectId),
     onSuccess: (_, projectId) => {
       removeProject(projectId);
-      queryClient.invalidateQueries(['projects']);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }
@@ -132,8 +138,8 @@ export function useCreateQuest() {
     mutationFn: (data: Parameters<typeof apiClient.createQuest>[0]) =>
       apiClient.createQuest(data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['quests']);
-      queryClient.invalidateQueries(['projects']);
+      queryClient.invalidateQueries({ queryKey: ['quests'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }
@@ -153,9 +159,9 @@ export function useUpdateQuest() {
       changes: Parameters<typeof apiClient.updateQuest>[1];
     }) => apiClient.updateQuest(id, changes),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries(['quests']);
-      queryClient.invalidateQueries(['quests', variables.id]);
-      queryClient.invalidateQueries(['projects']);
+      queryClient.invalidateQueries({ queryKey: ['quests'] });
+      queryClient.invalidateQueries({ queryKey: ['quests', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }

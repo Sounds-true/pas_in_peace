@@ -8,6 +8,7 @@
  * - Token refresh
  */
 
+import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { useUserStore } from '../stores/userStore';
@@ -19,24 +20,28 @@ import type { TelegramAuthData } from '../types';
 export function useCurrentUser() {
   const { setUser, setLoading } = useUserStore();
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['user', 'me'],
     queryFn: async () => {
       const user = await apiClient.getCurrentUser();
-      setUser(user);
       return user;
     },
     retry: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    onSuccess: (user) => {
-      setUser(user);
+  });
+
+  // Handle side effects with useEffect instead of callbacks
+  React.useEffect(() => {
+    if (query.data) {
+      setUser(query.data);
       setLoading(false);
-    },
-    onError: () => {
+    } else if (query.error) {
       setUser(null);
       setLoading(false);
-    },
-  });
+    }
+  }, [query.data, query.error, setUser, setLoading]);
+
+  return query;
 }
 
 /**
@@ -52,7 +57,7 @@ export function useTelegramLogin() {
       setUser(data.user);
       queryClient.setQueryData(['user', 'me'], data.user);
       // Invalidate all queries to refetch with new auth
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({ queryKey: [] });
     },
   });
 }
