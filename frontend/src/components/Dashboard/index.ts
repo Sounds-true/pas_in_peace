@@ -10,3 +10,6 @@ export type { DashboardLayoutProps } from './DashboardLayout';
 
 export { default as QuickActions } from './QuickActions';
 export type { QuickActionsProps } from './QuickActions';
+
+export { default as TrackCard } from './TrackCard';
+export type { TrackCardProps, Milestone } from './TrackCard';
