@@ -77,6 +77,12 @@ class ModerationStatusEnum(str, enum.Enum):
     NEEDS_REVIEW = "needs_review"
 
 
+class UserModeEnum(str, enum.Enum):
+    """User mode enumeration for inner_edu integration."""
+    EDUCATIONAL = "educational"  # 80-90% of users - learning support
+    THERAPEUTIC = "therapeutic"  # 10-20% of users - serious psychological issues
+
+
 class User(Base):
     """User model."""
 
@@ -84,6 +90,11 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     telegram_id = Column(String(100), unique=True, nullable=False, index=True)
+
+    # User mode (Phase 4.3 - inner_edu integration)
+    mode = Column(Enum(UserModeEnum), default=UserModeEnum.EDUCATIONAL)
+    parent_name = Column(String(255))
+    learning_profile = Column(JSON, default=dict)
 
     # State information
     current_state = Column(Enum(ConversationStateEnum), default=ConversationStateEnum.START)
@@ -123,7 +134,12 @@ class User(Base):
     quests = relationship("Quest", back_populates="user", cascade="all, delete-orphan")
     creative_projects = relationship("CreativeProject", back_populates="user", cascade="all, delete-orphan")
     track_milestones = relationship("TrackMilestone", back_populates="user", cascade="all, delete-orphan")
+    user_tracks = relationship("UserTrack", back_populates="user", cascade="all, delete-orphan")
     psychological_profile = relationship("PsychologicalProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    quest_builder_sessions = relationship("QuestBuilderSession", back_populates="user", cascade="all, delete-orphan")
+    quest_library = relationship("UserQuestLibrary", back_populates="user", cascade="all, delete-orphan")
+    quest_progress_records = relationship("QuestProgress", back_populates="user", cascade="all, delete-orphan")
+    quest_ratings = relationship("QuestRating", back_populates="user", cascade="all, delete-orphan")
 
 
 class Session(Base):
@@ -378,10 +394,16 @@ class Quest(Base):
     child_age = Column(Integer)
     child_interests = Column(JSON, default=list)  # Topics, hobbies, favorite subjects
 
-    # Quest content
-    quest_yaml = Column(Text, nullable=False)  # Full YAML definition for inner_edu
+    # Quest content (Phase 4.3 - dual storage)
+    graph_structure = Column(JSON)  # PRIMARY storage (JSONB) for inner_edu compatibility
+    quest_yaml = Column(Text, nullable=False)  # Generated from graph_structure, for backward compatibility
     total_nodes = Column(Integer, default=0)
     difficulty_level = Column(String(20))  # easy/medium/hard
+
+    # Inner Edu metadata (Phase 4.3)
+    psychological_module = Column(String(100), index=True)  # IFS, DBT, CBT, etc.
+    location = Column(String(100))  # Game world location
+    age_range = Column(String(20))  # "7-9", "10-12", etc.
 
     # Family memories and clues (for reveal mechanics)
     family_photos = Column(JSON, default=list)  # Paths to photos
@@ -399,6 +421,18 @@ class Quest(Base):
     reveal_enabled = Column(Boolean, default=True)
     reveal_threshold_percentage = Column(Float, default=0.8)  # When to show reveal (80%)
     reveal_message = Column(Text)  # Final message from parent
+    reveal_count = Column(Integer, default=0)  # Number of times reveal was viewed
+    last_reveal_at = Column(DateTime)  # Last reveal view timestamp
+
+    # Public marketplace (Phase 4.3 - inner_edu)
+    is_public = Column(Boolean, default=False, index=True)  # Available in public library
+    rating = Column(Float, default=0.0)  # Average rating (1-5)
+    plays_count = Column(Integer, default=0)  # Number of times played
+
+    # Psychologist review (Phase 4.3)
+    psychologist_reviewed = Column(Boolean, default=False)
+    psychologist_review_id = Column(Integer, ForeignKey("psychologist_reviews.id"))
+    reviewed_at = Column(DateTime)
 
     # Deployment
     deployed_to_inner_edu = Column(Boolean, default=False)
@@ -415,6 +449,9 @@ class Quest(Base):
     quest_analytics = relationship("QuestAnalytics", back_populates="quest", uselist=False, cascade="all, delete-orphan")
     privacy_settings = relationship("ChildPrivacySettings", back_populates="quest", uselist=False, cascade="all, delete-orphan")
     creative_project = relationship("CreativeProject", back_populates="quest", uselist=False)
+    psychologist_review = relationship("PsychologistReview", foreign_keys=[psychologist_review_id], uselist=False)
+    ratings = relationship("QuestRating", back_populates="quest", cascade="all, delete-orphan")
+    progress_records = relationship("QuestProgress", back_populates="quest", cascade="all, delete-orphan")
 
 
 class CreativeProject(Base):
@@ -600,3 +637,164 @@ class TrackMilestone(Base):
 
     # Relationships
     user = relationship("User", back_populates="track_milestones")
+
+
+class PsychologistReview(Base):
+    """Professional psychologist review for quests (Phase 4.3)."""
+
+    __tablename__ = "psychologist_reviews"
+
+    id = Column(Integer, primary_key=True)
+    quest_id = Column(Integer, ForeignKey("quests.id"), unique=True, nullable=False)
+
+    # Reviewer information
+    reviewer_name = Column(String(255))
+    reviewer_credentials = Column(String(500))
+
+    # Four rating scales (1-5 each)
+    emotional_safety_score = Column(Integer, nullable=False)
+    therapeutic_correctness_score = Column(Integer, nullable=False)
+    age_appropriateness_score = Column(Integer, nullable=False)
+    reveal_timing_score = Column(Integer, nullable=False)
+
+    # Overall assessment
+    overall_score = Column(Float)  # Average of 4 scales
+    is_approved = Column(Boolean, default=False, index=True)
+
+    # Detailed feedback
+    strengths = Column(Text)  # What works well
+    concerns = Column(Text)  # Potential issues
+    recommendations = Column(Text)  # Suggested improvements
+    modification_notes = Column(Text)  # Required changes for approval
+
+    # Review metadata
+    review_duration_minutes = Column(Integer)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Relationships
+    quest = relationship("Quest", foreign_keys=[quest_id], back_populates="psychologist_review")
+
+
+class QuestBuilderSession(Base):
+    """AI Quest Builder session tracking (from inner_edu)."""
+
+    __tablename__ = "quest_builder_sessions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    # AI conversation history
+    conversation_history = Column(JSON, default=list)  # List of messages
+
+    # Dialog stage (greeting → collecting_info → clarifying → generating → reviewing → quest_ready)
+    current_stage = Column(String(50), default="greeting")
+
+    # Current graph being built
+    current_graph = Column(JSON)  # Graph structure (nodes + edges)
+
+    # Quest context
+    quest_context = Column(JSON)  # Child info, preferences, memories
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="quest_builder_sessions")
+
+
+class UserQuestLibrary(Base):
+    """User's quest library (public marketplace quests from inner_edu)."""
+
+    __tablename__ = "user_quest_library"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    quest_id = Column(Integer, ForeignKey("quests.id"), nullable=False, index=True)
+
+    added_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="quest_library")
+    quest = relationship("Quest")
+
+
+class QuestProgress(Base):
+    """Child's quest completion progress (privacy-protected, requires consent)."""
+
+    __tablename__ = "quest_progress"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    quest_id = Column(Integer, ForeignKey("quests.id"), nullable=False, index=True)
+
+    # Progress tracking
+    current_step = Column(Integer, default=0)
+    completed = Column(Boolean, default=False)
+
+    # Session tracking
+    session_count = Column(Integer, default=0)
+    total_time_minutes = Column(Float, default=0.0)
+
+    # Timestamps
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime)
+    last_played_at = Column(DateTime, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="quest_progress_records")
+    quest = relationship("Quest", back_populates="progress_records")
+
+
+class QuestRating(Base):
+    """Quest ratings from parents (public marketplace)."""
+
+    __tablename__ = "quest_ratings"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    quest_id = Column(Integer, ForeignKey("quests.id"), nullable=False, index=True)
+
+    rating = Column(Integer, nullable=False)  # 1-5 stars
+    review_text = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="quest_ratings")
+    quest = relationship("Quest", back_populates="ratings")
+
+
+class UserTrack(Base):
+    """User recovery track progress (Phase 4.3 - normalized from recovery_tracks JSON)."""
+
+    __tablename__ = "user_tracks"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    # Track type
+    track_type = Column(Enum(RecoveryTrackEnum), nullable=False)
+
+    # Current phase
+    current_phase = Column(Enum(TrackPhaseEnum), default=TrackPhaseEnum.AWARENESS)
+
+    # Progress tracking
+    completion_percentage = Column(Integer, default=0)
+    weeks_active = Column(Integer, default=0)
+    days_active = Column(Integer, default=0)
+
+    # Activity tracking
+    total_activities = Column(Integer, default=0)
+    completed_activities = Column(Integer, default=0)
+    last_activity_at = Column(DateTime)
+
+    # Timestamps
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="user_tracks")
