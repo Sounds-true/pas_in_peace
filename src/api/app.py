@@ -18,6 +18,7 @@ from src.core.logger import get_logger
 from src.storage.database import DatabaseManager
 from src.orchestration.multi_track import MultiTrackManager
 from src.api.routes import tracks_router
+from src.api.quest_builder import router as quest_builder_router
 
 
 logger = get_logger(__name__)
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(tracks_router, prefix="/api/tracks", tags=["tracks"])
+    app.include_router(quest_builder_router, prefix="/api/quest-builder", tags=["quest-builder"])
 
     # Health check endpoint
     @app.get("/health", status_code=status.HTTP_200_OK)
