@@ -12,7 +12,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Menu, X, LogOut, Settings, Bell } from 'lucide-react';
 import { useRouter } from 'next/router';
-import Sidebar from './Sidebar';
+import { SidebarEnhanced } from './SidebarEnhanced';
 import { useUserStore } from '../../lib/stores/userStore';
 import { useLogout } from '../../lib/hooks/useAuth';
 
@@ -43,7 +43,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex">
       {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarEnhanced isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
