@@ -64,6 +64,7 @@ function QuestBuilderContent() {
   // Mind map state
   const [mindMapNodes, setMindMapNodes] = useState<QuestFlowNode[]>([]);
   const [mindMapEdges, setMindMapEdges] = useState<QuestFlowEdge[]>([]);
+  const [selectedNode, setSelectedNode] = useState<QuestFlowNode | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -288,6 +289,21 @@ function QuestBuilderContent() {
     router.push('/projects');
   };
 
+  const handleNodeClick = (node: QuestFlowNode) => {
+    setSelectedNode(node);
+  };
+
+  const handleNodesChange = (updatedNodes: QuestFlowNode[]) => {
+    setMindMapNodes(updatedNodes);
+  };
+
+  const handleEdgesChange = (updatedEdges: QuestFlowEdge[]) => {
+    setMindMapEdges(updatedEdges);
+  };
+
+  // Get AI-only messages for chat log
+  const aiMessages = messages.filter((m) => m.role === 'assistant');
+
   return (
     <DashboardLayout
       title="Создание квеста"
@@ -301,267 +317,219 @@ function QuestBuilderContent() {
         </button>
       }
     >
-      <div className="max-w-7xl mx-auto">
-        {/* Progress */}
-        <motion.div
-          className="frosted-card mb-6"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-white/70">
-              Шаг {Math.min(currentStep, 4)} из 4
-            </span>
-            <span className="text-sm font-medium text-white">
-              {Math.min((currentStep / 4) * 100, 100).toFixed(0)}%
-            </span>
-          </div>
-          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min((currentStep / 4) * 100, 100)}%` }}
-              transition={{ duration: 0.5 }}
-            />
-          </div>
-        </motion.div>
+      {/* Fullscreen Mind Map */}
+      <div className="fixed inset-0 -mt-20" style={{ paddingTop: '80px' }}>
+        <QuestFlowVisualizer
+          nodes={mindMapNodes}
+          edges={mindMapEdges}
+          mode="edit"
+          onNodeClick={handleNodeClick}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={handleEdgesChange}
+          className="w-full h-full"
+        />
+      </div>
 
-        {/* Split layout: Chat + Mind Map */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left: Chat container */}
-          <div className="frosted-card flex flex-col h-[600px]">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-glass">
-            <AnimatePresence initial={false}>
-              {messages.map((message) => (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className={`flex ${
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  <div
-                    className={`
-                    max-w-[80%] rounded-2xl px-4 py-3
-                    ${
-                      message.role === 'user'
-                        ? 'bg-blue-500/30 text-white'
-                        : 'bg-white/10 text-white'
-                    }
-                  `}
-                  >
-                    {message.role === 'assistant' && (
-                      <div className="flex items-center gap-2 mb-2">
-                        <Wand2 className="w-4 h-4 text-purple-400" />
-                        <span className="text-xs font-medium text-purple-400">
-                          AI-Ассистент
-                        </span>
-                      </div>
-                    )}
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                      {message.content}
-                    </p>
-                    <span className="text-xs text-white/50 mt-2 block">
-                      {message.timestamp.toLocaleTimeString('ru-RU', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-
-            {/* Loading indicator */}
-            {isLoading && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex justify-start"
-              >
-                <div className="bg-white/10 rounded-2xl px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Loader className="w-4 h-4 animate-spin text-purple-400" />
-                    <span className="text-sm text-white/70">
-                      Обрабатываю...
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            <div ref={messagesEndRef} />
+      {/* Floating Chat Log (right bottom) */}
+      <motion.div
+        className="fixed right-6 bottom-32 w-80 h-64 liquid-glass rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden border border-white/20"
+        initial={{ opacity: 0, x: 100 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="p-3 border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Wand2 className="w-4 h-4 text-purple-400" />
+            <h3 className="text-sm font-bold text-white">AI Действия</h3>
           </div>
-
-          {/* Input area */}
-          <div className="border-t border-white/10 p-4">
-            {isComplete ? (
-              <div className="flex gap-3">
-                <button
-                  onClick={handleSaveQuest}
-                  className="flex-1 glass-button bg-blue-500/20 hover:bg-blue-500/30 flex items-center justify-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  Сохранить квест
-                </button>
-                <button
-                  onClick={() => router.push('/quest-builder/preview')}
-                  className="glass-button bg-purple-500/20 hover:bg-purple-500/30 flex items-center gap-2"
-                >
-                  <Eye className="w-4 h-4" />
-                  Посмотреть
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Напиши свой ответ..."
-                  disabled={isLoading}
-                  className="flex-1 bg-white/5 rounded-xl px-4 py-3 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400/50 disabled:opacity-50"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!input.trim() || isLoading}
-                  className="glass-button bg-blue-500/20 hover:bg-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed p-3"
-                >
-                  <Send className="w-5 h-5" />
-                </button>
-              </div>
-            )}
-          </div>
+          <span className="text-xs text-white/50">
+            Шаг {currentStep}/4
+          </span>
         </div>
 
-          {/* Right: Mind Map */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-glass">
+          <AnimatePresence>
+            {aiMessages.map((message) => (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="text-xs text-white/80 bg-white/5 rounded-lg p-2"
+              >
+                <span className="text-purple-400 font-medium">AI:</span>{' '}
+                {message.content.split('\n')[0].substring(0, 100)}...
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          <div ref={messagesEndRef} />
+        </div>
+      </motion.div>
+
+      {/* Progress bar (top right) */}
+      <motion.div
+        className="fixed top-24 right-6 liquid-glass rounded-xl p-4 z-10 w-64"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium text-white/70">
+            Прогресс квеста
+          </span>
+          <span className="text-xs font-bold text-white">
+            {Math.min((currentStep / 4) * 100, 100).toFixed(0)}%
+          </span>
+        </div>
+        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
           <motion.div
-            className="frosted-card h-[600px] overflow-hidden"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
+            className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min((currentStep / 4) * 100, 100)}%` }}
             transition={{ duration: 0.5 }}
-          >
-            <div className="p-4 border-b border-white/10">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-purple-400" />
-                Карта квеста
-              </h3>
-              <p className="text-sm text-white/60 mt-1">
-                {mindMapNodes.length > 0
-                  ? `${mindMapNodes.length} узлов • Строится в реальном времени`
-                  : 'Отвечай на вопросы, карта будет расти'}
-              </p>
+          />
+        </div>
+        <div className="mt-2 text-xs text-white/60">
+          {mindMapNodes.length} узлов • {mindMapEdges.length} связей
+        </div>
+      </motion.div>
+
+      {/* Input bar (center bottom) */}
+      <motion.div
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6 z-20"
+        initial={{ opacity: 0, y: 50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="liquid-glass rounded-2xl shadow-2xl p-4 border border-white/20">
+          {isComplete ? (
+            <div className="flex gap-3">
+              <button
+                onClick={handleSaveQuest}
+                className="flex-1 glass-button bg-blue-500/20 hover:bg-blue-500/30 flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                Сохранить квест
+              </button>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="glass-button bg-purple-500/20 hover:bg-purple-500/30 flex items-center gap-2"
+              >
+                <Eye className="w-4 h-4" />
+                На Dashboard
+              </button>
             </div>
-            <div className="h-[calc(100%-80px)]">
-              {mindMapNodes.length > 0 ? (
-                <QuestFlowVisualizer
-                  nodes={mindMapNodes}
-                  edges={mindMapEdges}
-                  mode="view"
-                />
-              ) : (
-                <div className="h-full flex items-center justify-center">
-                  <div className="text-center">
-                    <Wand2 className="w-16 h-16 text-purple-400/50 mx-auto mb-4" />
-                    <p className="text-white/50 text-sm">
-                      Карта появится после первых ответов
+          ) : (
+            <div className="flex gap-3 items-center">
+              {isLoading && (
+                <Loader className="w-5 h-5 animate-spin text-purple-400" />
+              )}
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Введи свой ответ..."
+                disabled={isLoading}
+                className="flex-1 bg-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400/50 disabled:opacity-50"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!input.trim() || isLoading}
+                className="glass-button bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed p-3"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Node Details Modal */}
+      <AnimatePresence>
+        {selectedNode && (
+          <motion.div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 flex items-center justify-center p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedNode(null)}
+          >
+            <motion.div
+              className="liquid-glass rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-white/20"
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-white">
+                  {selectedNode.data.title}
+                </h3>
+                <button
+                  onClick={() => setSelectedNode(null)}
+                  className="text-white/50 hover:text-white transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">
+                    Тип узла
+                  </span>
+                  <p className="text-white mt-1 capitalize">{selectedNode.type}</p>
+                </div>
+
+                {selectedNode.data.description && (
+                  <div>
+                    <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">
+                      Описание
+                    </span>
+                    <p className="text-white/80 mt-1 text-sm">
+                      {selectedNode.data.description}
                     </p>
                   </div>
-                </div>
-              )}
-            </div>
-          </motion.div>
+                )}
 
-        {/* Quest preview (if complete) - full width */}
-        {isComplete && questData.tasks && (
-          <motion.div
-            className="frosted-card mt-6 col-span-1 lg:col-span-2"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <CheckCircle className="w-5 h-5 text-green-400" />
-              <h3 className="text-xl font-bold text-white">
-                Квест готов!
-              </h3>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-lg font-bold text-white mb-2">
-                  {questData.title}
-                </h4>
-                <p className="text-white/70 text-sm mb-4">
-                  {questData.description}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div className="frosted-card">
-                  <span className="text-white/60">Возраст</span>
-                  <p className="text-white font-medium">{questData.childAge} лет</p>
-                </div>
-                <div className="frosted-card">
-                  <span className="text-white/60">Тип</span>
-                  <p className="text-white font-medium">
-                    {questData.questType === 'educational'
-                      ? 'Образовательный'
-                      : questData.questType === 'game'
-                      ? 'Игровой'
-                      : 'Эмоциональный'}
-                  </p>
-                </div>
-                <div className="frosted-card">
-                  <span className="text-white/60">Сложность</span>
-                  <p className="text-white font-medium">
-                    {questData.difficulty === 'easy'
-                      ? 'Лёгкий'
-                      : questData.difficulty === 'medium'
-                      ? 'Средний'
-                      : 'Сложный'}
-                  </p>
-                </div>
-                <div className="frosted-card">
-                  <span className="text-white/60">Время</span>
-                  <p className="text-white font-medium">{questData.duration} мин</p>
+                <div>
+                  <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">
+                    Связи
+                  </span>
+                  <div className="mt-2 space-y-1">
+                    {mindMapEdges
+                      .filter(
+                        (e) =>
+                          e.source === selectedNode.id ||
+                          e.target === selectedNode.id
+                      )
+                      .map((edge) => (
+                        <div
+                          key={edge.id}
+                          className="text-xs text-white/70 bg-white/5 rounded px-2 py-1"
+                        >
+                          {edge.source === selectedNode.id ? '→' : '←'}{' '}
+                          {edge.source === selectedNode.id
+                            ? mindMapNodes.find((n) => n.id === edge.target)
+                                ?.data.title
+                            : mindMapNodes.find((n) => n.id === edge.source)
+                                ?.data.title}
+                        </div>
+                      ))}
+                    {mindMapEdges.filter(
+                      (e) =>
+                        e.source === selectedNode.id ||
+                        e.target === selectedNode.id
+                    ).length === 0 && (
+                      <p className="text-xs text-white/50">Нет связей</p>
+                    )}
+                  </div>
                 </div>
               </div>
-
-              <div>
-                <h5 className="text-white font-medium mb-3">
-                  Задания ({questData.tasks.length})
-                </h5>
-                <div className="space-y-2">
-                  {questData.tasks.map((task, index) => (
-                    <div
-                      key={index}
-                      className="bg-white/5 rounded-lg p-3 hover:bg-white/10 transition-colors"
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-blue-400 font-bold">#{index + 1}</span>
-                        <h6 className="text-white font-medium">{task.title}</h6>
-                        <span className="ml-auto text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300">
-                          {task.type === 'question'
-                            ? 'Вопрос'
-                            : task.type === 'activity'
-                            ? 'Активность'
-                            : 'Рефлексия'}
-                        </span>
-                      </div>
-                      <p className="text-sm text-white/70">{task.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            </motion.div>
           </motion.div>
         )}
-        </div>
-      </div>
+      </AnimatePresence>
     </DashboardLayout>
   );
 }
