@@ -20,7 +20,7 @@ export interface TrackProgressMiniProps {
   phase: string;
   nextMilestone?: string;
   color: string;
-  icon: string; // emoji
+  icon: React.ReactNode; // lucide-react icon
   className?: string;
 }
 
