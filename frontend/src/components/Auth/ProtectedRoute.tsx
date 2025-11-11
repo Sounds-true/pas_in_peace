@@ -11,7 +11,6 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useUserStore } from '../../lib/stores/userStore';
-import { useCurrentUser } from '../../lib/hooks/useAuth';
 
 export interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -26,17 +25,17 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useUserStore();
-  const { isLoading: isLoadingUser, error } = useCurrentUser();
 
   useEffect(() => {
     // If not authenticated and not loading, redirect to login
-    if (!isAuthenticated && !isLoading && !isLoadingUser && error) {
+    // Note: We rely on local store only (no API check) to support mock login
+    if (!isAuthenticated && !isLoading) {
       router.push(redirectTo);
     }
-  }, [isAuthenticated, isLoading, isLoadingUser, error, router, redirectTo]);
+  }, [isAuthenticated, isLoading, router, redirectTo]);
 
   // Show loading state
-  if (isLoading || isLoadingUser) {
+  if (isLoading) {
     return (
       loadingComponent || (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
