@@ -19,6 +19,7 @@ import {
 import { useRouter } from 'next/router';
 import { ProtectedRoute } from '../../components/Auth/ProtectedRoute';
 import { DashboardLayout } from '../../components/Dashboard';
+import { QuestFlowVisualizer, QuestFlowNode, QuestFlowEdge } from '../../components/QuestFlow/QuestFlowVisualizer';
 
 interface Message {
   id: string;
@@ -60,6 +61,10 @@ function QuestBuilderContent() {
   const [isComplete, setIsComplete] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Mind map state
+  const [mindMapNodes, setMindMapNodes] = useState<QuestFlowNode[]>([]);
+  const [mindMapEdges, setMindMapEdges] = useState<QuestFlowEdge[]>([]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -67,6 +72,87 @@ function QuestBuilderContent() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Update mind map as conversation progresses
+  useEffect(() => {
+    const nodes: QuestFlowNode[] = [];
+    const edges: QuestFlowEdge[] = [];
+
+    if (currentStep >= 1) {
+      // Start node (always visible)
+      nodes.push({
+        id: 'start',
+        type: 'start',
+        position: { x: 250, y: 50 },
+        data: {
+          title: 'Начало квеста',
+          description: questData.childAge ? `Для ребёнка ${questData.childAge} лет` : 'Создаём квест...',
+        },
+      });
+    }
+
+    if (currentStep >= 2 && questData.childInterests && questData.childInterests.length > 0) {
+      // Theme node
+      nodes.push({
+        id: 'theme',
+        type: 'question',
+        position: { x: 250, y: 180 },
+        data: {
+          title: 'Тема квеста',
+          description: questData.childInterests.join(', '),
+        },
+      });
+      edges.push({ id: 'e-start-theme', source: 'start', target: 'theme' });
+    }
+
+    if (currentStep >= 3 && questData.tasks && questData.tasks.length > 0) {
+      // Task nodes (spread horizontally)
+      const tasksPerRow = 3;
+      questData.tasks.forEach((task, index) => {
+        const row = Math.floor(index / tasksPerRow);
+        const col = index % tasksPerRow;
+        const xOffset = col * 200 - ((tasksPerRow - 1) * 200) / 2;
+
+        nodes.push({
+          id: `task-${index}`,
+          type: task.type === 'reflection' ? 'choice' : task.type === 'question' ? 'question' : 'activity',
+          position: { x: 250 + xOffset, y: 320 + row * 150 },
+          data: {
+            title: task.title,
+            description: task.description.substring(0, 60) + '...',
+          },
+        });
+
+        // Connect first task to theme, others to previous task
+        if (index === 0) {
+          edges.push({ id: `e-theme-task-${index}`, source: 'theme', target: `task-${index}` });
+        } else {
+          edges.push({ id: `e-task-${index - 1}-task-${index}`, source: `task-${index - 1}`, target: `task-${index}` });
+        }
+      });
+
+      if (isComplete) {
+        // End node
+        nodes.push({
+          id: 'end',
+          type: 'end',
+          position: { x: 250, y: 320 + Math.ceil(questData.tasks.length / tasksPerRow) * 150 },
+          data: {
+            title: 'Квест завершён!',
+            description: `${questData.duration} минут`,
+          },
+        });
+        edges.push({
+          id: `e-task-${questData.tasks.length - 1}-end`,
+          source: `task-${questData.tasks.length - 1}`,
+          target: 'end',
+        });
+      }
+    }
+
+    setMindMapNodes(nodes);
+    setMindMapEdges(edges);
+  }, [currentStep, questData, isComplete]);
 
   // Simulate AI conversation
   const handleSendMessage = async () => {
@@ -215,7 +301,7 @@ function QuestBuilderContent() {
         </button>
       }
     >
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Progress */}
         <motion.div
           className="frosted-card mb-6"
@@ -240,8 +326,10 @@ function QuestBuilderContent() {
           </div>
         </motion.div>
 
-        {/* Chat container */}
-        <div className="frosted-card flex flex-col h-[600px]">
+        {/* Split layout: Chat + Mind Map */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left: Chat container */}
+          <div className="frosted-card flex flex-col h-[600px]">
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-glass">
             <AnimatePresence initial={false}>
@@ -350,10 +438,48 @@ function QuestBuilderContent() {
           </div>
         </div>
 
-        {/* Quest preview (if complete) */}
+          {/* Right: Mind Map */}
+          <motion.div
+            className="frosted-card h-[600px] overflow-hidden"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="p-4 border-b border-white/10">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                Карта квеста
+              </h3>
+              <p className="text-sm text-white/60 mt-1">
+                {mindMapNodes.length > 0
+                  ? `${mindMapNodes.length} узлов • Строится в реальном времени`
+                  : 'Отвечай на вопросы, карта будет расти'}
+              </p>
+            </div>
+            <div className="h-[calc(100%-80px)]">
+              {mindMapNodes.length > 0 ? (
+                <QuestFlowVisualizer
+                  nodes={mindMapNodes}
+                  edges={mindMapEdges}
+                  mode="view"
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <Wand2 className="w-16 h-16 text-purple-400/50 mx-auto mb-4" />
+                    <p className="text-white/50 text-sm">
+                      Карта появится после первых ответов
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+
+        {/* Quest preview (if complete) - full width */}
         {isComplete && questData.tasks && (
           <motion.div
-            className="frosted-card mt-6"
+            className="frosted-card mt-6 col-span-1 lg:col-span-2"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
@@ -434,6 +560,7 @@ function QuestBuilderContent() {
             </div>
           </motion.div>
         )}
+        </div>
       </div>
     </DashboardLayout>
   );
