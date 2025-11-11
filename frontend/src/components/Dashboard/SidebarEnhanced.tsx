@@ -23,6 +23,10 @@ import {
   HelpCircle,
   ChevronDown,
   ChevronUp,
+  User,
+  Heart,
+  MessageCircle,
+  Users,
 } from 'lucide-react';
 import { TrackProgressMini } from './TrackProgressMini';
 
@@ -104,7 +108,7 @@ const mockTracks = [
     phase: 'Фаза 2: Основы',
     nextMilestone: 'Медитация 7 дней подряд',
     color: '#60a5fa',
-    icon: '🧘',
+    icon: <User className="w-4 h-4" />,
   },
   {
     trackId: 'child_connection',
@@ -113,7 +117,7 @@ const mockTracks = [
     phase: 'Фаза 1: Оценка',
     nextMilestone: 'Создать первый квест',
     color: '#a78bfa',
-    icon: '❤️',
+    icon: <Heart className="w-4 h-4" />,
   },
   {
     trackId: 'negotiation',
@@ -122,7 +126,7 @@ const mockTracks = [
     phase: 'Фаза 1: Оценка',
     nextMilestone: 'Первое спокойное письмо',
     color: '#f472b6',
-    icon: '🤝',
+    icon: <MessageCircle className="w-4 h-4" />,
   },
   {
     trackId: 'community',
@@ -131,7 +135,7 @@ const mockTracks = [
     phase: 'Фаза 2: Основы',
     nextMilestone: 'Поддержать 3 родителя',
     color: '#34d399',
-    icon: '👥',
+    icon: <Users className="w-4 h-4" />,
   },
 ];
 
@@ -161,24 +165,14 @@ export const SidebarEnhanced: React.FC<SidebarEnhancedProps> = ({
       )}
 
       {/* Sidebar */}
-      <motion.aside
+      <aside
         className={`
-          fixed top-0 left-0 h-full z-50
-          lg:sticky lg:top-0 lg:z-0
+          fixed top-0 left-0 h-full z-50 w-80
+          lg:static lg:z-0
+          transition-transform duration-300
+          ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           ${className}
         `}
-        initial={false}
-        animate={{
-          x: isOpen ? 0 : -320,
-        }}
-        transition={{
-          type: 'spring',
-          stiffness: 300,
-          damping: 30,
-        }}
-        style={{
-          width: '320px',
-        }}
       >
         <div className="h-full liquid-glass border-r border-white/10 flex flex-col">
           {/* Logo/Brand */}
@@ -312,11 +306,11 @@ export const SidebarEnhanced: React.FC<SidebarEnhancedProps> = ({
 
             {/* Version */}
             <div className="text-center">
-              <p className="text-xs text-white/40">v0.2.0 • Made with ❤️</p>
+              <p className="text-xs text-white/40">v0.2.0 • PAS in Peace</p>
             </div>
           </div>
         </div>
-      </motion.aside>
+      </aside>
     </>
   );
 };

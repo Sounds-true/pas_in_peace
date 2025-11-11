@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Sparkles, Mail, Target } from 'lucide-react';
 import { ProtectedRoute } from '../components/Auth/ProtectedRoute';
 import { DashboardLayout, QuickActions } from '../components/Dashboard';
 import { MultiProgressRing } from '../components/LiquidGlass';
@@ -32,7 +33,7 @@ function DashboardContent() {
         transition={{ duration: 0.5 }}
       >
         <h2 className="text-3xl font-bold text-white mb-2">
-          Добро пожаловать, {user?.first_name}! 👋
+          Добро пожаловать, {user?.first_name}!
         </h2>
         <p className="text-white/70 text-lg">
           Ваш путь восстановления связи с ребёнком
@@ -101,15 +102,17 @@ function DashboardContent() {
           </h3>
           <div className="space-y-3">
             {[
-              { icon: '✨', text: 'Создан квест "Тайна зоопарка"', time: '2 часа назад' },
-              { icon: '💌', text: 'Отправлено письмо благодарности', time: 'Вчера' },
-              { icon: '🎯', text: 'Достигнута цель: "Медитация 7 дней"', time: '3 дня назад' },
+              { icon: <Sparkles className="w-5 h-5 text-yellow-400" />, text: 'Создан квест "Тайна зоопарка"', time: '2 часа назад' },
+              { icon: <Mail className="w-5 h-5 text-pink-400" />, text: 'Отправлено письмо благодарности', time: 'Вчера' },
+              { icon: <Target className="w-5 h-5 text-green-400" />, text: 'Достигнута цель: "Медитация 7 дней"', time: '3 дня назад' },
             ].map((item, index) => (
               <div
                 key={index}
                 className="flex items-center gap-4 p-3 rounded-lg hover:bg-white/5 transition-colors"
               >
-                <span className="text-2xl">{item.icon}</span>
+                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-white/5">
+                  {item.icon}
+                </div>
                 <div className="flex-1">
                   <p className="text-white font-medium text-sm">{item.text}</p>
                   <p className="text-white/50 text-xs">{item.time}</p>
